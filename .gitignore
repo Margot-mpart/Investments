@@ -1,0 +1,8 @@
+# Local voice engine: cloned-voice storage created at runtime by server.py
+voices/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/

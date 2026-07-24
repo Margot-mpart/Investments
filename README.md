@@ -20,12 +20,17 @@ python3 -m http.server 8000
 # then visit http://localhost:8000
 ```
 
-## Two speech engines
+## Three speech engines
 
 **Browser voices (default).** Uses the Web Speech API built into Chrome,
 Edge, Safari, and Firefox. Works immediately with no account or API key.
 Sliders control speed, pitch, and volume. Playback is live synthesis, so
 there is no downloadable file in this mode.
+
+**Local · no API.** Runs the open-source **Coqui XTTS-v2** model on your own
+machine for voice cloning and speech — no account, no API key, no per-use
+cost, and nothing leaves your computer. Requires the bundled Python server
+(see [Local voice engine](#local-voice-engine-no-api) below).
 
 **ElevenLabs API.** Switch the toggle in the header, paste your own
 ElevenLabs API key, and hit Connect. The app then:
@@ -38,7 +43,47 @@ ElevenLabs API key, and hit Connect. The app then:
 Your API key stays in the browser tab and is sent only to
 `api.elevenlabs.io` — there is no backend.
 
-## Voice cloning
+## Local voice engine (no API)
+
+The **Local · no API** engine does voice cloning and text-to-speech entirely
+on your own machine using the open-source [Coqui XTTS-v2](https://github.com/idiap/coqui-ai-TTS)
+model. No account, no API key, no per-use cost, and no audio ever leaves your
+computer.
+
+### 1. Start the server
+
+```bash
+pip install -r requirements.txt   # installs coqui-tts, fastapi, uvicorn, pydub…
+python server.py                  # serves on http://127.0.0.1:8000
+```
+
+You also need **ffmpeg** installed on your system (used to decode uploaded
+audio) — e.g. `brew install ffmpeg`, `apt install ffmpeg`, or
+`choco install ffmpeg`. The first synthesis downloads the model (~1.8 GB) and
+caches it. A GPU is optional but makes synthesis much faster; CPU works but is
+slow.
+
+### 2. Use it in the app
+
+1. Open `index.html` and pick the **Local · no API** engine.
+2. Click **Connect** (default URL `http://127.0.0.1:8000`).
+3. In **Clone a voice (local)**, name the voice, add a short clean sample
+   (upload files or record from your mic), tick the consent box, and hit
+   **Create voice clone**.
+4. The clone appears in the voice list with a `CLONE` badge and is
+   auto-selected. Type text, hit **Generate speech**, and you'll hear it — and
+   can download the WAV.
+
+Cloning here is *zero-shot*: your samples are stored locally under `./voices/`
+as a reference clip, and XTTS-v2 conditions on that clip at synthesis time.
+Nothing is uploaded and no model is fine-tuned.
+
+**How the server talks to the app.** `server.py` exposes an
+ElevenLabs-compatible subset (`GET /v1/voices`, `POST /v1/voices/add`,
+`POST /v1/text-to-speech/{voice_id}`, `DELETE /v1/voices/{voice_id}`), so the
+same front-end drives either the local model or the hosted API.
+
+## Voice cloning with ElevenLabs
 
 With the ElevenLabs engine connected, the **Clone a voice** panel creates an
 instant voice clone from your own samples:
@@ -62,8 +107,16 @@ and applicable law.
 ## Features
 
 - 5,000-character editor with live character count
-- Searchable voice list with generated avatars
+- Searchable voice list with generated avatars and `CLONE` badges
 - Animated waveform while audio plays
-- History of the last 10 ElevenLabs generations with replay and download
+- History of the last 10 generations with replay and download
 - Responsive layout (sidebar stacks below the editor on narrow screens)
-- Zero dependencies — one self-contained `index.html`
+- Front-end is one self-contained `index.html` with zero dependencies
+
+## Responsible use
+
+Voice cloning can convincingly imitate a real person. Only clone your own
+voice, or a voice you have the speaker's explicit permission to use. Do not use
+it to impersonate people, to deceive, or for any purpose that violates
+applicable law or the terms of the engine you use. The consent checkbox in the
+cloning panel is a reminder of this, not a substitute for actual consent.

@@ -1,0 +1,15 @@
+# VoxStudio local voice engine (server.py)
+#
+# Coqui XTTS-v2 for zero-shot voice cloning + TTS, served over HTTP.
+# The `coqui-tts` package is the maintained community fork of the original
+# (now-discontinued) Coqui `TTS` project and exposes the same `TTS` import.
+#
+# A GPU is optional but strongly recommended — CPU synthesis works but is slow.
+# ffmpeg must be installed on the system for audio decoding (pydub).
+
+coqui-tts>=0.24.1
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9
+pydub>=0.25.1
+numpy>=1.24
