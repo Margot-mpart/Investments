@@ -50,7 +50,21 @@ on your own machine using the open-source [Coqui XTTS-v2](https://github.com/idi
 model. No account, no API key, no per-use cost, and no audio ever leaves your
 computer.
 
-### Easiest: let Claude Code do it
+### Easiest: double-click a file (no typing)
+
+- **macOS:** double-click **`start-mac.command`**
+- **Windows:** double-click **`start-windows.bat`**
+
+The first time, it installs everything it needs (this downloads a few GB and
+takes a while), starts the voice engine, and opens the studio in your browser.
+After that, double-clicking just launches it. To shut the engine down, use
+`stop-mac.command` / `stop-windows.bat`.
+
+If macOS says the file is from an unidentified developer, right-click it →
+**Open** → **Open**. If Windows asks about the installers, allow them — they're
+Python and ffmpeg, the two free tools the voice engine runs on.
+
+### Or let Claude Code do it
 
 This repo ships a Claude Code slash command at
 [`.claude/commands/voxstudio.md`](.claude/commands/voxstudio.md). Open this
