@@ -7,6 +7,12 @@
 # A GPU is optional but strongly recommended — CPU synthesis works but is slow.
 # ffmpeg must be installed on the system for audio decoding (pydub).
 
+# PyTorch and torchaudio are required but are NOT pulled in automatically by
+# coqui-tts (they are left optional so you can choose a CPU or CUDA build).
+# On Windows/Linux the default wheels include CUDA support; on macOS, CPU/MPS.
+torch>=2.1
+torchaudio>=2.1
+
 coqui-tts>=0.24.1
 fastapi>=0.110
 uvicorn>=0.29
