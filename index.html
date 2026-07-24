@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VoxStudio — AI Voice Generator</title>
+<style>
+  :root {
+    --bg: #0d0d10;
+    --panel: #16161c;
+    --panel-2: #1d1d25;
+    --border: #2a2a35;
+    --text: #f2f2f5;
+    --text-dim: #9a9aa8;
+    --accent: #7c5cff;
+    --accent-hover: #9276ff;
+    --accent-soft: rgba(124, 92, 255, 0.14);
+    --danger: #ff5c7a;
+    --ok: #3ddc97;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 0.2px;
+  }
+  .logo-mark {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), #4ec6ff);
+    display: grid;
+    place-items: center;
+    font-size: 15px;
+  }
+  .engine-toggle {
+    display: flex;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px;
+    gap: 3px;
+  }
+  .engine-toggle button {
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 13px;
+    padding: 7px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .engine-toggle button.active {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  /* ---------- Layout ---------- */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 20px;
+    padding: 20px 24px;
+    max-width: 1280px;
+    width: 100%;
+    margin: 0 auto;
+    min-height: 0;
+  }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  /* ---------- Editor ---------- */
+  .editor {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+  }
+  .editor-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+  }
+  textarea {
+    flex: 1;
+    min-height: 260px;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1.65;
+    padding: 20px;
+    font-family: inherit;
+  }
+  textarea::placeholder { color: #55556a; }
+  .editor-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--panel-2);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .char-count { font-size: 13px; color: var(--text-dim); }
+  .char-count.over { color: var(--danger); }
+  .controls { display: flex; gap: 10px; align-items: center; }
+  .btn {
+    border: none;
+    border-radius: 10px;
+    padding: 11px 22px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s ease;
+    font-family: inherit;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover:not(:disabled) { color: var(--text); border-color: var(--text-dim); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* ---------- Player ---------- */
+  .player {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    display: none;
+    align-items: center;
+    gap: 16px;
+  }
+  .player.visible { display: flex; }
+  .player audio { flex: 1; height: 40px; }
+  .wave {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 32px;
+    flex: 1;
+  }
+  .wave span {
+    width: 4px;
+    border-radius: 2px;
+    background: var(--accent);
+    height: 20%;
+    animation: none;
+  }
+  .wave.playing span { animation: wave 0.9s ease-in-out infinite; }
+  .wave span:nth-child(2n)  { animation-delay: 0.12s; }
+  .wave span:nth-child(3n)  { animation-delay: 0.24s; }
+  .wave span:nth-child(5n)  { animation-delay: 0.36s; }
+  .wave span:nth-child(7n)  { animation-delay: 0.48s; }
+  @keyframes wave {
+    0%, 100% { height: 20%; }
+    50% { height: 95%; }
+  }
+
+  /* ---------- History ---------- */
+  .history { display: flex; flex-direction: column; gap: 8px; }
+  .history h3 { font-size: 13px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+  .history-item {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+  }
+  .history-item .h-text {
+    flex: 1;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .history-item button {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .history-item button:hover { border-color: var(--accent); }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+  }
+  .card h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+  }
+
+  /* Voice list */
+  .voice-search {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 9px 12px;
+    font-size: 13px;
+    outline: none;
+    margin-bottom: 10px;
+    font-family: inherit;
+  }
+  .voice-search:focus { border-color: var(--accent); }
+  .voice-list {
+    max-height: 260px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .voice-list::-webkit-scrollbar { width: 6px; }
+  .voice-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .voice-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.12s ease;
+  }
+  .voice-item:hover { background: var(--panel-2); }
+  .voice-item.selected {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+  }
+  .voice-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .voice-meta { min-width: 0; }
+  .voice-name {
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .voice-lang { font-size: 11px; color: var(--text-dim); }
+  .voice-empty { color: var(--text-dim); font-size: 13px; padding: 8px 4px; }
+
+  /* Sliders */
+  .slider-row { margin-bottom: 16px; }
+  .slider-row:last-child { margin-bottom: 0; }
+  .slider-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .slider-label .val { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  input[type="range"] {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid #fff;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid #fff;
+  }
+
+  /* API key card */
+  .api-card { display: none; }
+  .api-card.visible { display: block; }
+  .api-card input[type="password"], .api-card input[type="text"] {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 13px;
+    outline: none;
+    font-family: inherit;
+  }
+  .api-card input:focus { border-color: var(--accent); }
+  .api-hint { font-size: 12px; color: var(--text-dim); margin-top: 10px; line-height: 1.5; }
+  .api-hint a { color: var(--accent); }
+  .api-status { font-size: 12px; margin-top: 8px; }
+  .api-status.ok { color: var(--ok); }
+  .api-status.err { color: var(--danger); }
+  .btn-small {
+    margin-top: 10px;
+    width: 100%;
+    justify-content: center;
+    padding: 9px 14px;
+  }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    transition: transform 0.25s ease;
+    z-index: 100;
+    max-width: 90vw;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.error { border-color: var(--danger); }
+
+  select {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 9px 12px;
+    font-size: 13px;
+    outline: none;
+    font-family: inherit;
+    margin-bottom: 4px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark">🎙️</div>
+    VoxStudio
+  </div>
+  <div class="engine-toggle" role="tablist" aria-label="Speech engine">
+    <button id="engineBrowser" class="active" role="tab">Browser voices</button>
+    <button id="engineEleven" role="tab">ElevenLabs API</button>
+  </div>
+</header>
+
+<main>
+  <!-- ===== Editor column ===== -->
+  <section class="editor">
+    <div class="editor-card">
+      <textarea id="text" maxlength="5000"
+        placeholder="Start typing here, or paste any text you want to turn into lifelike speech…"></textarea>
+      <div class="editor-footer">
+        <span class="char-count"><span id="charCount">0</span> / 5,000 characters</span>
+        <div class="controls">
+          <button class="btn btn-ghost" id="stopBtn" disabled>■ Stop</button>
+          <button class="btn btn-ghost" id="downloadBtn" disabled title="Download is available with the ElevenLabs API engine">⬇ Download</button>
+          <button class="btn btn-primary" id="generateBtn">▶ Generate speech</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="player" id="player">
+      <div class="wave" id="wave">
+        <span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <audio id="audio" controls></audio>
+    </div>
+
+    <div class="history" id="historySection" style="display:none">
+      <h3>History</h3>
+      <div id="historyList"></div>
+    </div>
+  </section>
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar">
+    <div class="card api-card" id="apiCard">
+      <h2>ElevenLabs API key</h2>
+      <input type="password" id="apiKey" placeholder="xi-api-key" autocomplete="off" />
+      <button class="btn btn-primary btn-small" id="connectBtn">Connect</button>
+      <div class="api-status" id="apiStatus"></div>
+      <p class="api-hint">
+        Your key is kept in this browser tab only and sent directly to
+        <code>api.elevenlabs.io</code> — no server in between. Get a key at
+        <a href="https://elevenlabs.io" target="_blank" rel="noopener">elevenlabs.io</a>.
+      </p>
+    </div>
+
+    <div class="card api-card" id="modelCard">
+      <h2>Model</h2>
+      <select id="modelSelect">
+        <option value="eleven_multilingual_v2">Multilingual v2 (highest quality)</option>
+        <option value="eleven_turbo_v2_5">Turbo v2.5 (fast, multilingual)</option>
+        <option value="eleven_flash_v2_5">Flash v2.5 (lowest latency)</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <h2>Voice</h2>
+      <input class="voice-search" id="voiceSearch" placeholder="Search voices…" />
+      <div class="voice-list" id="voiceList">
+        <div class="voice-empty">Loading voices…</div>
+      </div>
+    </div>
+
+    <div class="card" id="browserSettings">
+      <h2>Voice settings</h2>
+      <div class="slider-row">
+        <div class="slider-label"><span>Speed</span><span class="val" id="rateVal">1.00×</span></div>
+        <input type="range" id="rate" min="0.5" max="2" step="0.05" value="1" />
+      </div>
+      <div class="slider-row">
+        <div class="slider-label"><span>Pitch</span><span class="val" id="pitchVal">1.00</span></div>
+        <input type="range" id="pitch" min="0.5" max="2" step="0.05" value="1" />
+      </div>
+      <div class="slider-row">
+        <div class="slider-label"><span>Volume</span><span class="val" id="volumeVal">100%</span></div>
+        <input type="range" id="volume" min="0" max="1" step="0.05" value="1" />
+      </div>
+    </div>
+
+    <div class="card api-card" id="elevenSettings">
+      <h2>Voice settings</h2>
+      <div class="slider-row">
+        <div class="slider-label"><span>Stability</span><span class="val" id="stabilityVal">0.50</span></div>
+        <input type="range" id="stability" min="0" max="1" step="0.05" value="0.5" />
+      </div>
+      <div class="slider-row">
+        <div class="slider-label"><span>Similarity</span><span class="val" id="similarityVal">0.75</span></div>
+        <input type="range" id="similarity" min="0" max="1" step="0.05" value="0.75" />
+      </div>
+      <div class="slider-row">
+        <div class="slider-label"><span>Style exaggeration</span><span class="val" id="styleVal">0.00</span></div>
+        <input type="range" id="style" min="0" max="1" step="0.05" value="0" />
+      </div>
+    </div>
+  </aside>
+</main>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- State ----------
+  const state = {
+    engine: "browser",          // "browser" | "eleven"
+    browserVoices: [],
+    elevenVoices: [],
+    selectedBrowserVoice: null, // SpeechSynthesisVoice
+    selectedElevenVoice: null,  // { voice_id, name, labels }
+    apiKey: "",
+    history: [],                // { id, text, voiceName, url }
+    lastBlobUrl: null,
+    speaking: false,
+  };
+
+  const AVATAR_COLORS = [
+    "#7c5cff", "#4ec6ff", "#3ddc97", "#ffb84e",
+    "#ff5c7a", "#b45cff", "#5cffd9", "#ff8a5c",
+  ];
+
+  // ---------- DOM ----------
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    text: $("text"), charCount: $("charCount"),
+    generateBtn: $("generateBtn"), stopBtn: $("stopBtn"), downloadBtn: $("downloadBtn"),
+    player: $("player"), audio: $("audio"), wave: $("wave"),
+    voiceList: $("voiceList"), voiceSearch: $("voiceSearch"),
+    engineBrowser: $("engineBrowser"), engineEleven: $("engineEleven"),
+    apiCard: $("apiCard"), modelCard: $("modelCard"),
+    browserSettings: $("browserSettings"), elevenSettings: $("elevenSettings"),
+    apiKey: $("apiKey"), connectBtn: $("connectBtn"), apiStatus: $("apiStatus"),
+    modelSelect: $("modelSelect"),
+    historySection: $("historySection"), historyList: $("historyList"),
+    toast: $("toast"),
+    rate: $("rate"), pitch: $("pitch"), volume: $("volume"),
+    stability: $("stability"), similarity: $("similarity"), style: $("style"),
+  };
+
+  // ---------- Toast ----------
+  let toastTimer;
+  function toast(msg, isError = false) {
+    els.toast.textContent = msg;
+    els.toast.classList.toggle("error", isError);
+    els.toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => els.toast.classList.remove("show"), 3500);
+  }
+
+  // ---------- Sliders ----------
+  const sliderBindings = [
+    ["rate", "rateVal", (v) => Number(v).toFixed(2) + "×"],
+    ["pitch", "pitchVal", (v) => Number(v).toFixed(2)],
+    ["volume", "volumeVal", (v) => Math.round(v * 100) + "%"],
+    ["stability", "stabilityVal", (v) => Number(v).toFixed(2)],
+    ["similarity", "similarityVal", (v) => Number(v).toFixed(2)],
+    ["style", "styleVal", (v) => Number(v).toFixed(2)],
+  ];
+  sliderBindings.forEach(([id, valId, fmt]) => {
+    const input = $(id), label = $(valId);
+    input.addEventListener("input", () => (label.textContent = fmt(input.value)));
+  });
+
+  // ---------- Character count ----------
+  els.text.addEventListener("input", () => {
+    const n = els.text.value.length;
+    els.charCount.textContent = n.toLocaleString();
+    els.charCount.parentElement.classList.toggle("over", n >= 5000);
+  });
+
+  // ---------- Voice list rendering ----------
+  function avatarColor(name) {
+    let hash = 0;
+    for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+    return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+  }
+
+  function renderVoices() {
+    const query = els.voiceSearch.value.trim().toLowerCase();
+    const voices = state.engine === "browser" ? state.browserVoices : state.elevenVoices;
+    els.voiceList.innerHTML = "";
+
+    const filtered = voices.filter((v) => {
+      const name = state.engine === "browser" ? v.name : v.name;
+      const extra = state.engine === "browser" ? v.lang : (v.labels ? Object.values(v.labels).join(" ") : "");
+      return !query || (name + " " + extra).toLowerCase().includes(query);
+    });
+
+    if (!filtered.length) {
+      const empty = document.createElement("div");
+      empty.className = "voice-empty";
+      empty.textContent =
+        state.engine === "eleven" && !state.apiKey
+          ? "Connect your ElevenLabs API key to load voices."
+          : "No voices found.";
+      els.voiceList.appendChild(empty);
+      return;
+    }
+
+    filtered.forEach((v) => {
+      const item = document.createElement("div");
+      item.className = "voice-item";
+      const isSelected =
+        state.engine === "browser"
+          ? state.selectedBrowserVoice === v
+          : state.selectedElevenVoice && state.selectedElevenVoice.voice_id === v.voice_id;
+      if (isSelected) item.classList.add("selected");
+
+      const avatar = document.createElement("div");
+      avatar.className = "voice-avatar";
+      avatar.style.background = avatarColor(v.name);
+      avatar.textContent = v.name.replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "V";
+
+      const meta = document.createElement("div");
+      meta.className = "voice-meta";
+      const name = document.createElement("div");
+      name.className = "voice-name";
+      name.textContent = v.name;
+      const lang = document.createElement("div");
+      lang.className = "voice-lang";
+      lang.textContent =
+        state.engine === "browser"
+          ? v.lang + (v.localService ? " · local" : " · network")
+          : v.labels
+            ? [v.labels.accent, v.labels.gender, v.labels.age].filter(Boolean).join(" · ")
+            : "ElevenLabs voice";
+      meta.append(name, lang);
+      item.append(avatar, meta);
+
+      item.addEventListener("click", () => {
+        if (state.engine === "browser") state.selectedBrowserVoice = v;
+        else state.selectedElevenVoice = v;
+        renderVoices();
+      });
+
+      els.voiceList.appendChild(item);
+    });
+  }
+
+  els.voiceSearch.addEventListener("input", renderVoices);
+
+  // ---------- Browser voices ----------
+  function loadBrowserVoices() {
+    const voices = window.speechSynthesis ? speechSynthesis.getVoices() : [];
+    if (!voices.length) return;
+    // English voices first, then alphabetical — mirrors a sensible default list.
+    state.browserVoices = voices.slice().sort((a, b) => {
+      const aEn = a.lang.startsWith("en") ? 0 : 1;
+      const bEn = b.lang.startsWith("en") ? 0 : 1;
+      return aEn - bEn || a.name.localeCompare(b.name);
+    });
+    if (!state.selectedBrowserVoice) {
+      state.selectedBrowserVoice =
+        state.browserVoices.find((v) => v.default) || state.browserVoices[0];
+    }
+    if (state.engine === "browser") renderVoices();
+  }
+
+  if (window.speechSynthesis) {
+    loadBrowserVoices();
+    speechSynthesis.onvoiceschanged = loadBrowserVoices;
+  } else {
+    els.voiceList.innerHTML =
+      '<div class="voice-empty">This browser does not support speech synthesis. Use the ElevenLabs API engine instead.</div>';
+  }
+
+  // ---------- Engine toggle ----------
+  function setEngine(engine) {
+    state.engine = engine;
+    const isEleven = engine === "eleven";
+    els.engineBrowser.classList.toggle("active", !isEleven);
+    els.engineEleven.classList.toggle("active", isEleven);
+    els.apiCard.classList.toggle("visible", isEleven);
+    els.modelCard.classList.toggle("visible", isEleven);
+    els.elevenSettings.classList.toggle("visible", isEleven);
+    els.browserSettings.style.display = isEleven ? "none" : "";
+    els.downloadBtn.title = isEleven
+      ? "Download the last generated MP3"
+      : "Download is available with the ElevenLabs API engine";
+    stopPlayback();
+    renderVoices();
+  }
+  els.engineBrowser.addEventListener("click", () => setEngine("browser"));
+  els.engineEleven.addEventListener("click", () => setEngine("eleven"));
+
+  // ---------- ElevenLabs API ----------
+  const API_BASE = "https://api.elevenlabs.io/v1";
+
+  async function connectEleven() {
+    const key = els.apiKey.value.trim();
+    if (!key) return toast("Enter your ElevenLabs API key first.", true);
+    els.apiStatus.textContent = "Connecting…";
+    els.apiStatus.className = "api-status";
+    try {
+      const res = await fetch(`${API_BASE}/voices`, { headers: { "xi-api-key": key } });
+      if (!res.ok) throw new Error(`API returned ${res.status}`);
+      const data = await res.json();
+      state.apiKey = key;
+      state.elevenVoices = data.voices || [];
+      state.selectedElevenVoice = state.elevenVoices[0] || null;
+      els.apiStatus.textContent = `Connected — ${state.elevenVoices.length} voices available.`;
+      els.apiStatus.className = "api-status ok";
+      renderVoices();
+    } catch (err) {
+      state.apiKey = "";
+      els.apiStatus.textContent = "Connection failed: " + err.message;
+      els.apiStatus.className = "api-status err";
+    }
+  }
+  els.connectBtn.addEventListener("click", connectEleven);
+  els.apiKey.addEventListener("keydown", (e) => { if (e.key === "Enter") connectEleven(); });
+
+  async function generateEleven(text) {
+    if (!state.apiKey) {
+      toast("Connect your ElevenLabs API key first.", true);
+      return;
+    }
+    if (!state.selectedElevenVoice) {
+      toast("Pick a voice first.", true);
+      return;
+    }
+    setGenerating(true, "Generating…");
+    try {
+      const res = await fetch(
+        `${API_BASE}/text-to-speech/${state.selectedElevenVoice.voice_id}`,
+        {
+          method: "POST",
+          headers: {
+            "xi-api-key": state.apiKey,
+            "Content-Type": "application/json",
+            Accept: "audio/mpeg",
+          },
+          body: JSON.stringify({
+            text,
+            model_id: els.modelSelect.value,
+            voice_settings: {
+              stability: Number(els.stability.value),
+              similarity_boost: Number(els.similarity.value),
+              style: Number(els.style.value),
+            },
+          }),
+        }
+      );
+      if (!res.ok) {
+        let detail = `API returned ${res.status}`;
+        try {
+          const body = await res.json();
+          if (body.detail) detail = typeof body.detail === "string" ? body.detail : body.detail.message || detail;
+        } catch (_) { /* non-JSON error body */ }
+        throw new Error(detail);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      state.lastBlobUrl = url;
+      els.audio.src = url;
+      els.player.classList.add("visible");
+      els.audio.play();
+      els.downloadBtn.disabled = false;
+      addHistory(text, state.selectedElevenVoice.name, url);
+    } catch (err) {
+      toast("Generation failed: " + err.message, true);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  // ---------- Browser TTS ----------
+  function generateBrowser(text) {
+    if (!window.speechSynthesis) {
+      toast("Speech synthesis is not supported in this browser.", true);
+      return;
+    }
+    speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    if (state.selectedBrowserVoice) utterance.voice = state.selectedBrowserVoice;
+    utterance.rate = Number(els.rate.value);
+    utterance.pitch = Number(els.pitch.value);
+    utterance.volume = Number(els.volume.value);
+
+    utterance.onstart = () => {
+      state.speaking = true;
+      els.player.classList.add("visible");
+      els.audio.style.display = "none";
+      els.wave.classList.add("playing");
+      setGenerating(true, "Speaking…", /*allowStop*/ true);
+    };
+    const done = () => {
+      state.speaking = false;
+      els.wave.classList.remove("playing");
+      setGenerating(false);
+    };
+    utterance.onend = done;
+    utterance.onerror = (e) => {
+      if (e.error !== "canceled" && e.error !== "interrupted") {
+        toast("Speech error: " + e.error, true);
+      }
+      done();
+    };
+    speechSynthesis.speak(utterance);
+  }
+
+  // ---------- Shared controls ----------
+  function setGenerating(active, label, allowStop) {
+    els.generateBtn.disabled = active;
+    els.generateBtn.textContent = active ? (label || "Working…") : "▶ Generate speech";
+    els.stopBtn.disabled = !(active && (allowStop || state.engine === "browser")) && !state.speaking;
+  }
+
+  function stopPlayback() {
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    state.speaking = false;
+    els.wave.classList.remove("playing");
+    if (!els.audio.paused) els.audio.pause();
+    setGenerating(false);
+  }
+
+  els.generateBtn.addEventListener("click", () => {
+    const text = els.text.value.trim();
+    if (!text) return toast("Type some text first.", true);
+    els.audio.style.display = "";
+    if (state.engine === "eleven") generateEleven(text);
+    else generateBrowser(text);
+  });
+
+  els.stopBtn.addEventListener("click", stopPlayback);
+
+  els.downloadBtn.addEventListener("click", () => {
+    if (!state.lastBlobUrl) return;
+    const a = document.createElement("a");
+    a.href = state.lastBlobUrl;
+    a.download = "voxstudio-speech.mp3";
+    a.click();
+  });
+
+  els.audio.addEventListener("play", () => els.wave.classList.add("playing"));
+  els.audio.addEventListener("pause", () => els.wave.classList.remove("playing"));
+  els.audio.addEventListener("ended", () => els.wave.classList.remove("playing"));
+
+  // ---------- History (ElevenLabs generations) ----------
+  function addHistory(text, voiceName, url) {
+    state.history.unshift({ id: Date.now() + Math.random(), text, voiceName, url });
+    if (state.history.length > 10) {
+      const removed = state.history.pop();
+      URL.revokeObjectURL(removed.url);
+    }
+    renderHistory();
+  }
+
+  function renderHistory() {
+    els.historySection.style.display = state.history.length ? "" : "none";
+    els.historyList.innerHTML = "";
+    state.history.forEach((entry) => {
+      const item = document.createElement("div");
+      item.className = "history-item";
+
+      const label = document.createElement("span");
+      label.className = "h-text";
+      label.textContent = `${entry.voiceName}: ${entry.text}`;
+      label.title = entry.text;
+
+      const playBtn = document.createElement("button");
+      playBtn.textContent = "▶ Play";
+      playBtn.addEventListener("click", () => {
+        els.audio.style.display = "";
+        els.audio.src = entry.url;
+        els.player.classList.add("visible");
+        els.audio.play();
+        state.lastBlobUrl = entry.url;
+        els.downloadBtn.disabled = false;
+      });
+
+      const dlBtn = document.createElement("button");
+      dlBtn.textContent = "⬇";
+      dlBtn.title = "Download MP3";
+      dlBtn.addEventListener("click", () => {
+        const a = document.createElement("a");
+        a.href = entry.url;
+        a.download = "voxstudio-speech.mp3";
+        a.click();
+      });
+
+      item.append(label, playBtn, dlBtn);
+      els.historyList.appendChild(item);
+    });
+  }
+
+  // ---------- Init ----------
+  setEngine("browser");
+})();
+</script>
+</body>
+</html>
