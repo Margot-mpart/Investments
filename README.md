@@ -50,6 +50,26 @@ on your own machine using the open-source [Coqui XTTS-v2](https://github.com/idi
 model. No account, no API key, no per-use cost, and no audio ever leaves your
 computer.
 
+### Easiest: let Claude Code do it
+
+This repo ships a Claude Code slash command at
+[`.claude/commands/voxstudio.md`](.claude/commands/voxstudio.md). Open this
+project folder in Claude Code (the terminal CLI or the Claude desktop app), then
+run:
+
+```
+/voxstudio
+```
+
+Claude Code will detect your OS, install ffmpeg and the Python dependencies into
+a local virtual environment, start the server, and open the studio — the whole
+setup, hands-off. Other actions: `/voxstudio status`, `/voxstudio stop`,
+`/voxstudio clone`. (The command is project-scoped, so it appears automatically
+when this folder is open; you can also copy the file into `~/.claude/commands/`
+to make it available everywhere.)
+
+### Or set it up manually
+
 ### 1. Start the server
 
 ```bash
