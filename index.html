@@ -305,6 +305,22 @@
   }
   .voice-lang { font-size: 11px; color: var(--text-dim); }
   .voice-empty { color: var(--text-dim); font-size: 13px; padding: 8px 4px; }
+  .voice-del {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 6px;
+    opacity: 0;
+    flex-shrink: 0;
+    transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+  }
+  .voice-item:hover .voice-del { opacity: 1; }
+  .voice-del:hover { color: var(--danger); background: var(--panel); }
 
   /* Sliders */
   .slider-row { margin-bottom: 16px; }
@@ -343,8 +359,20 @@
   }
 
   /* API key card */
-  .api-card { display: none; }
-  .api-card.visible { display: block; }
+  .api-card, .local-card, .clone-card { display: none; }
+  .api-card.visible, .local-card.visible, .clone-card.visible { display: block; }
+  .local-card input[type="text"] {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 13px;
+    outline: none;
+    font-family: inherit;
+  }
+  .local-card input[type="text"]:focus { border-color: var(--accent); }
   .api-card input[type="password"], .api-card input[type="text"] {
     width: 100%;
     background: var(--panel-2);
@@ -400,6 +428,103 @@
     font-family: inherit;
     margin-bottom: 4px;
   }
+
+  /* ---------- Voice cloning ---------- */
+  .clone-card input[type="text"] {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 13px;
+    outline: none;
+    font-family: inherit;
+    margin-bottom: 10px;
+  }
+  .clone-card input[type="text"]:focus { border-color: var(--accent); }
+  .dropzone {
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    padding: 18px 12px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+    margin-bottom: 10px;
+  }
+  .dropzone:hover, .dropzone.dragover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--text);
+  }
+  .sample-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .sample-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+  .sample-item .s-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sample-item .s-size { color: var(--text-dim); flex-shrink: 0; }
+  .sample-item .s-remove {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+    line-height: 1;
+  }
+  .sample-item .s-remove:hover { color: var(--danger); }
+  .record-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .record-row .btn { flex: 1; justify-content: center; padding: 9px 10px; font-size: 13px; }
+  .btn-record.recording {
+    background: var(--danger);
+    color: #fff;
+    border-color: var(--danger);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.65; }
+  }
+  .consent-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin-bottom: 10px;
+  }
+  .consent-row input[type="checkbox"] {
+    margin-top: 2px;
+    accent-color: var(--accent);
+    width: 15px; height: 15px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .clone-hint { font-size: 12px; color: var(--text-dim); line-height: 1.5; margin-bottom: 10px; }
+  .voice-badge {
+    font-size: 10px;
+    background: var(--accent-soft);
+    color: var(--accent-hover);
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
 </style>
 </head>
 <body>
@@ -411,6 +536,7 @@
   </div>
   <div class="engine-toggle" role="tablist" aria-label="Speech engine">
     <button id="engineBrowser" class="active" role="tab">Browser voices</button>
+    <button id="engineLocal" role="tab">Local · no API</button>
     <button id="engineEleven" role="tab">ElevenLabs API</button>
   </div>
 </header>
@@ -449,6 +575,19 @@
 
   <!-- ===== Sidebar ===== -->
   <aside class="sidebar">
+    <div class="card local-card" id="localCard">
+      <h2>Local voice engine</h2>
+      <input type="text" id="localUrl" value="http://127.0.0.1:8000" spellcheck="false" />
+      <button class="btn btn-primary btn-small" id="localConnectBtn">Connect</button>
+      <div class="api-status" id="localStatus"></div>
+      <p class="api-hint">
+        Runs the open-source <strong>Coqui XTTS-v2</strong> model on your own
+        machine — no account, no API key, no per-use cost. Start the bundled
+        server first (<code>python server.py</code>); see the README. All voice
+        samples and cloning stay on your computer.
+      </p>
+    </div>
+
     <div class="card api-card" id="apiCard">
       <h2>ElevenLabs API key</h2>
       <input type="password" id="apiKey" placeholder="xi-api-key" autocomplete="off" />
@@ -478,6 +617,32 @@
       </div>
     </div>
 
+    <div class="card clone-card" id="cloneCard">
+      <h2 id="cloneHeading">Clone a voice</h2>
+      <p class="clone-hint">
+        Create a voice clone from a short sample of clean speech. Upload audio
+        files or record one right here.
+      </p>
+      <input type="text" id="cloneName" placeholder="Voice name (e.g. My voice)" maxlength="100" />
+      <div class="dropzone" id="dropzone">
+        Drop audio files here or click to browse<br />
+        <small>mp3, wav, m4a, webm — up to 25 files</small>
+      </div>
+      <input type="file" id="cloneFiles" accept="audio/*,video/webm" multiple hidden />
+      <div class="record-row">
+        <button class="btn btn-ghost btn-record" id="recordBtn">🎤 Record sample</button>
+      </div>
+      <div class="sample-list" id="sampleList"></div>
+      <label class="consent-row">
+        <input type="checkbox" id="cloneConsent" />
+        <span>I confirm this is my own voice, or I have the speaker's explicit
+        consent to clone it, and my use complies with applicable law and the
+        terms of whichever engine I use.</span>
+      </label>
+      <button class="btn btn-primary btn-small" id="cloneBtn" disabled>✦ Create voice clone</button>
+      <div class="api-status" id="cloneStatus"></div>
+    </div>
+
     <div class="card" id="browserSettings">
       <h2>Voice settings</h2>
       <div class="slider-row">
@@ -492,6 +657,33 @@
         <div class="slider-label"><span>Volume</span><span class="val" id="volumeVal">100%</span></div>
         <input type="range" id="volume" min="0" max="1" step="0.05" value="1" />
       </div>
+    </div>
+
+    <div class="card local-card" id="localSettings">
+      <h2>Speech language</h2>
+      <select id="langSelect">
+        <option value="en">English</option>
+        <option value="es">Spanish</option>
+        <option value="fr">French</option>
+        <option value="de">German</option>
+        <option value="it">Italian</option>
+        <option value="pt">Portuguese</option>
+        <option value="pl">Polish</option>
+        <option value="tr">Turkish</option>
+        <option value="ru">Russian</option>
+        <option value="nl">Dutch</option>
+        <option value="cs">Czech</option>
+        <option value="ar">Arabic</option>
+        <option value="zh-cn">Chinese</option>
+        <option value="hu">Hungarian</option>
+        <option value="ko">Korean</option>
+        <option value="ja">Japanese</option>
+        <option value="hi">Hindi</option>
+      </select>
+      <p class="api-hint" style="margin-top:8px">
+        XTTS-v2 is multilingual and can speak any of these in a cloned voice,
+        regardless of the language the voice was sampled in.
+      </p>
     </div>
 
     <div class="card api-card" id="elevenSettings">
@@ -520,14 +712,17 @@
 
   // ---------- State ----------
   const state = {
-    engine: "browser",          // "browser" | "eleven"
+    engine: "browser",          // "browser" | "eleven" | "local"
     browserVoices: [],
-    elevenVoices: [],
+    apiVoices: [],              // shared by the "eleven" and "local" engines
     selectedBrowserVoice: null, // SpeechSynthesisVoice
-    selectedElevenVoice: null,  // { voice_id, name, labels }
+    selectedApiVoice: null,     // { voice_id, name, category, labels }
     apiKey: "",
+    localUrl: "http://127.0.0.1:8000",
+    localReady: false,
     history: [],                // { id, text, voiceName, url }
     lastBlobUrl: null,
+    lastExt: "mp3",
     speaking: false,
   };
 
@@ -543,13 +738,19 @@
     generateBtn: $("generateBtn"), stopBtn: $("stopBtn"), downloadBtn: $("downloadBtn"),
     player: $("player"), audio: $("audio"), wave: $("wave"),
     voiceList: $("voiceList"), voiceSearch: $("voiceSearch"),
-    engineBrowser: $("engineBrowser"), engineEleven: $("engineEleven"),
-    apiCard: $("apiCard"), modelCard: $("modelCard"),
+    engineBrowser: $("engineBrowser"), engineEleven: $("engineEleven"), engineLocal: $("engineLocal"),
+    apiCard: $("apiCard"), modelCard: $("modelCard"), localCard: $("localCard"),
     browserSettings: $("browserSettings"), elevenSettings: $("elevenSettings"),
     apiKey: $("apiKey"), connectBtn: $("connectBtn"), apiStatus: $("apiStatus"),
     modelSelect: $("modelSelect"),
+    localUrl: $("localUrl"), localConnectBtn: $("localConnectBtn"), localStatus: $("localStatus"),
+    localSettings: $("localSettings"), langSelect: $("langSelect"),
+    cloneCard: $("cloneCard"), cloneHeading: $("cloneHeading"),
     historySection: $("historySection"), historyList: $("historyList"),
     toast: $("toast"),
+    cloneName: $("cloneName"), cloneFiles: $("cloneFiles"), dropzone: $("dropzone"),
+    sampleList: $("sampleList"), recordBtn: $("recordBtn"),
+    cloneConsent: $("cloneConsent"), cloneBtn: $("cloneBtn"), cloneStatus: $("cloneStatus"),
     rate: $("rate"), pitch: $("pitch"), volume: $("volume"),
     stability: $("stability"), similarity: $("similarity"), style: $("style"),
   };
@@ -594,13 +795,13 @@
 
   function renderVoices() {
     const query = els.voiceSearch.value.trim().toLowerCase();
-    const voices = state.engine === "browser" ? state.browserVoices : state.elevenVoices;
+    const isBrowser = state.engine === "browser";
+    const voices = isBrowser ? state.browserVoices : state.apiVoices;
     els.voiceList.innerHTML = "";
 
     const filtered = voices.filter((v) => {
-      const name = state.engine === "browser" ? v.name : v.name;
-      const extra = state.engine === "browser" ? v.lang : (v.labels ? Object.values(v.labels).join(" ") : "");
-      return !query || (name + " " + extra).toLowerCase().includes(query);
+      const extra = isBrowser ? v.lang : (v.labels ? Object.values(v.labels).join(" ") : "");
+      return !query || (v.name + " " + extra).toLowerCase().includes(query);
     });
 
     if (!filtered.length) {
@@ -609,7 +810,11 @@
       empty.textContent =
         state.engine === "eleven" && !state.apiKey
           ? "Connect your ElevenLabs API key to load voices."
-          : "No voices found.";
+          : state.engine === "local" && !state.localReady
+            ? "Connect to your local voice server to load voices."
+            : state.engine === "local"
+              ? "No voices yet — clone one below to get started."
+              : "No voices found.";
       els.voiceList.appendChild(empty);
       return;
     }
@@ -617,10 +822,9 @@
     filtered.forEach((v) => {
       const item = document.createElement("div");
       item.className = "voice-item";
-      const isSelected =
-        state.engine === "browser"
-          ? state.selectedBrowserVoice === v
-          : state.selectedElevenVoice && state.selectedElevenVoice.voice_id === v.voice_id;
+      const isSelected = isBrowser
+        ? state.selectedBrowserVoice === v
+        : state.selectedApiVoice && state.selectedApiVoice.voice_id === v.voice_id;
       if (isSelected) item.classList.add("selected");
 
       const avatar = document.createElement("div");
@@ -633,20 +837,39 @@
       const name = document.createElement("div");
       name.className = "voice-name";
       name.textContent = v.name;
+      if (!isBrowser && (v.category === "cloned" || v.category === "generated")) {
+        const badge = document.createElement("span");
+        badge.className = "voice-badge";
+        badge.textContent = v.category === "cloned" ? "CLONE" : "GENERATED";
+        name.appendChild(badge);
+      }
       const lang = document.createElement("div");
       lang.className = "voice-lang";
-      lang.textContent =
-        state.engine === "browser"
-          ? v.lang + (v.localService ? " · local" : " · network")
-          : v.labels
-            ? [v.labels.accent, v.labels.gender, v.labels.age].filter(Boolean).join(" · ")
-            : "ElevenLabs voice";
+      lang.textContent = isBrowser
+        ? v.lang + (v.localService ? " · local" : " · network")
+        : v.labels && Object.keys(v.labels).length
+          ? [v.labels.accent, v.labels.gender, v.labels.age].filter(Boolean).join(" · ")
+          : state.engine === "local" ? "Local voice" : "ElevenLabs voice";
       meta.append(name, lang);
       item.append(avatar, meta);
 
+      // User-created voices (clones/generated) can be deleted from the account/server.
+      if (!isBrowser && (v.category === "cloned" || v.category === "generated")) {
+        const del = document.createElement("button");
+        del.className = "voice-del";
+        del.textContent = "🗑";
+        del.title = `Delete "${v.name}"`;
+        del.setAttribute("aria-label", `Delete ${v.name}`);
+        del.addEventListener("click", (e) => {
+          e.stopPropagation();
+          deleteVoice(v);
+        });
+        item.appendChild(del);
+      }
+
       item.addEventListener("click", () => {
-        if (state.engine === "browser") state.selectedBrowserVoice = v;
-        else state.selectedElevenVoice = v;
+        if (isBrowser) state.selectedBrowserVoice = v;
+        else state.selectedApiVoice = v;
         renderVoices();
       });
 
@@ -685,24 +908,77 @@
   function setEngine(engine) {
     state.engine = engine;
     const isEleven = engine === "eleven";
-    els.engineBrowser.classList.toggle("active", !isEleven);
+    const isLocal = engine === "local";
+    const isApi = isEleven || isLocal;
+    els.engineBrowser.classList.toggle("active", engine === "browser");
+    els.engineLocal.classList.toggle("active", isLocal);
     els.engineEleven.classList.toggle("active", isEleven);
     els.apiCard.classList.toggle("visible", isEleven);
     els.modelCard.classList.toggle("visible", isEleven);
+    els.localCard.classList.toggle("visible", isLocal);
+    els.localSettings.classList.toggle("visible", isLocal);
+    els.cloneCard.classList.toggle("visible", isApi);
     els.elevenSettings.classList.toggle("visible", isEleven);
-    els.browserSettings.style.display = isEleven ? "none" : "";
-    els.downloadBtn.title = isEleven
-      ? "Download the last generated MP3"
-      : "Download is available with the ElevenLabs API engine";
+    els.browserSettings.style.display = engine === "browser" ? "" : "none";
+    els.cloneHeading.textContent = isLocal ? "Clone a voice (local)" : "Clone a voice";
+    els.downloadBtn.title = isApi
+      ? "Download the last generated audio"
+      : "Download is available with the Local and ElevenLabs engines";
     stopPlayback();
     renderVoices();
   }
   els.engineBrowser.addEventListener("click", () => setEngine("browser"));
   els.engineEleven.addEventListener("click", () => setEngine("eleven"));
+  els.engineLocal.addEventListener("click", () => setEngine("local"));
 
-  // ---------- ElevenLabs API ----------
+  // ---------- API engine helpers (shared by ElevenLabs + local) ----------
   const API_BASE = "https://api.elevenlabs.io/v1";
 
+  function apiBase() {
+    return state.engine === "local"
+      ? state.localUrl.replace(/\/+$/, "") + "/v1"
+      : API_BASE;
+  }
+  function apiAuthHeaders() {
+    return state.engine === "eleven" ? { "xi-api-key": state.apiKey } : {};
+  }
+  function apiReady() {
+    return state.engine === "eleven" ? !!state.apiKey : state.localReady;
+  }
+
+  // ---------- Local voice server ----------
+  async function connectLocal() {
+    state.localUrl = els.localUrl.value.trim() || "http://127.0.0.1:8000";
+    els.localStatus.textContent = "Connecting…";
+    els.localStatus.className = "api-status";
+    try {
+      const res = await fetch(`${apiBase()}/voices`);
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const data = await res.json();
+      state.localReady = true;
+      state.apiVoices = data.voices || [];
+      state.selectedApiVoice = state.apiVoices[0] || null;
+      // Ask the server which engine it's using (VoxCPM vs XTTS) for the status line.
+      let engineLabel = "";
+      try {
+        const info = await (await fetch(`${state.localUrl.replace(/\/+$/, "")}/`)).json();
+        if (info && info.engine_label) engineLabel = " · " + info.engine_label;
+      } catch (_) { /* root endpoint optional */ }
+      els.localStatus.textContent =
+        `Connected — ${state.apiVoices.length} voice(s)${engineLabel}.`;
+      els.localStatus.className = "api-status ok";
+      renderVoices();
+    } catch (err) {
+      state.localReady = false;
+      els.localStatus.textContent =
+        "Could not reach the local server: " + err.message + ". Is server.py running?";
+      els.localStatus.className = "api-status err";
+    }
+  }
+  els.localConnectBtn.addEventListener("click", connectLocal);
+  els.localUrl.addEventListener("keydown", (e) => { if (e.key === "Enter") connectLocal(); });
+
+  // ---------- ElevenLabs API ----------
   async function connectEleven() {
     const key = els.apiKey.value.trim();
     if (!key) return toast("Enter your ElevenLabs API key first.", true);
@@ -713,9 +989,9 @@
       if (!res.ok) throw new Error(`API returned ${res.status}`);
       const data = await res.json();
       state.apiKey = key;
-      state.elevenVoices = data.voices || [];
-      state.selectedElevenVoice = state.elevenVoices[0] || null;
-      els.apiStatus.textContent = `Connected — ${state.elevenVoices.length} voices available.`;
+      state.apiVoices = data.voices || [];
+      state.selectedApiVoice = state.apiVoices[0] || null;
+      els.apiStatus.textContent = `Connected — ${state.apiVoices.length} voices available.`;
       els.apiStatus.className = "api-status ok";
       renderVoices();
     } catch (err) {
@@ -727,27 +1003,24 @@
   els.connectBtn.addEventListener("click", connectEleven);
   els.apiKey.addEventListener("keydown", (e) => { if (e.key === "Enter") connectEleven(); });
 
-  async function generateEleven(text) {
-    if (!state.apiKey) {
-      toast("Connect your ElevenLabs API key first.", true);
+  async function generateApi(text) {
+    if (!apiReady()) {
+      toast(state.engine === "local"
+        ? "Connect to your local voice server first."
+        : "Connect your ElevenLabs API key first.", true);
       return;
     }
-    if (!state.selectedElevenVoice) {
+    if (!state.selectedApiVoice) {
       toast("Pick a voice first.", true);
       return;
     }
+    const isLocal = state.engine === "local";
     setGenerating(true, "Generating…");
     try {
-      const res = await fetch(
-        `${API_BASE}/text-to-speech/${state.selectedElevenVoice.voice_id}`,
-        {
-          method: "POST",
-          headers: {
-            "xi-api-key": state.apiKey,
-            "Content-Type": "application/json",
-            Accept: "audio/mpeg",
-          },
-          body: JSON.stringify({
+      // ElevenLabs takes model_id + voice_settings; the local server takes text + language.
+      const body = isLocal
+        ? { text, language: els.langSelect.value }
+        : {
             text,
             model_id: els.modelSelect.value,
             voice_settings: {
@@ -755,25 +1028,36 @@
               similarity_boost: Number(els.similarity.value),
               style: Number(els.style.value),
             },
-          }),
+          };
+      const res = await fetch(
+        `${apiBase()}/text-to-speech/${state.selectedApiVoice.voice_id}`,
+        {
+          method: "POST",
+          headers: {
+            ...apiAuthHeaders(),
+            "Content-Type": "application/json",
+            Accept: isLocal ? "audio/wav" : "audio/mpeg",
+          },
+          body: JSON.stringify(body),
         }
       );
       if (!res.ok) {
-        let detail = `API returned ${res.status}`;
+        let detail = `${isLocal ? "Server" : "API"} returned ${res.status}`;
         try {
-          const body = await res.json();
-          if (body.detail) detail = typeof body.detail === "string" ? body.detail : body.detail.message || detail;
+          const errBody = await res.json();
+          if (errBody.detail) detail = typeof errBody.detail === "string" ? errBody.detail : errBody.detail.message || detail;
         } catch (_) { /* non-JSON error body */ }
         throw new Error(detail);
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       state.lastBlobUrl = url;
+      state.lastExt = isLocal ? "wav" : "mp3";
       els.audio.src = url;
       els.player.classList.add("visible");
       els.audio.play();
       els.downloadBtn.disabled = false;
-      addHistory(text, state.selectedElevenVoice.name, url);
+      addHistory(text, state.selectedApiVoice.name, url, state.lastExt);
     } catch (err) {
       toast("Generation failed: " + err.message, true);
     } finally {
@@ -835,27 +1119,30 @@
     const text = els.text.value.trim();
     if (!text) return toast("Type some text first.", true);
     els.audio.style.display = "";
-    if (state.engine === "eleven") generateEleven(text);
-    else generateBrowser(text);
+    if (state.engine === "browser") generateBrowser(text);
+    else generateApi(text);
   });
 
   els.stopBtn.addEventListener("click", stopPlayback);
 
-  els.downloadBtn.addEventListener("click", () => {
-    if (!state.lastBlobUrl) return;
+  function downloadUrl(url, ext) {
     const a = document.createElement("a");
-    a.href = state.lastBlobUrl;
-    a.download = "voxstudio-speech.mp3";
+    a.href = url;
+    a.download = "voxstudio-speech." + (ext || "mp3");
     a.click();
+  }
+
+  els.downloadBtn.addEventListener("click", () => {
+    if (state.lastBlobUrl) downloadUrl(state.lastBlobUrl, state.lastExt);
   });
 
   els.audio.addEventListener("play", () => els.wave.classList.add("playing"));
   els.audio.addEventListener("pause", () => els.wave.classList.remove("playing"));
   els.audio.addEventListener("ended", () => els.wave.classList.remove("playing"));
 
-  // ---------- History (ElevenLabs generations) ----------
-  function addHistory(text, voiceName, url) {
-    state.history.unshift({ id: Date.now() + Math.random(), text, voiceName, url });
+  // ---------- History (API generations) ----------
+  function addHistory(text, voiceName, url, ext) {
+    state.history.unshift({ id: Date.now() + Math.random(), text, voiceName, url, ext: ext || "mp3" });
     if (state.history.length > 10) {
       const removed = state.history.pop();
       URL.revokeObjectURL(removed.url);
@@ -883,23 +1170,220 @@
         els.player.classList.add("visible");
         els.audio.play();
         state.lastBlobUrl = entry.url;
+        state.lastExt = entry.ext;
         els.downloadBtn.disabled = false;
       });
 
       const dlBtn = document.createElement("button");
       dlBtn.textContent = "⬇";
-      dlBtn.title = "Download MP3";
-      dlBtn.addEventListener("click", () => {
-        const a = document.createElement("a");
-        a.href = entry.url;
-        a.download = "voxstudio-speech.mp3";
-        a.click();
-      });
+      dlBtn.title = "Download audio";
+      dlBtn.addEventListener("click", () => downloadUrl(entry.url, entry.ext));
 
       item.append(label, playBtn, dlBtn);
       els.historyList.appendChild(item);
     });
   }
+
+  // ---------- Voice cloning (ElevenLabs + local XTTS-v2) ----------
+  const samples = []; // { file: File|Blob, name, size }
+  let mediaRecorder = null;
+  let recordChunks = [];
+
+  function fmtSize(bytes) {
+    if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  function renderSamples() {
+    els.sampleList.innerHTML = "";
+    samples.forEach((s, i) => {
+      const item = document.createElement("div");
+      item.className = "sample-item";
+      const name = document.createElement("span");
+      name.className = "s-name";
+      name.textContent = "🎵 " + s.name;
+      name.title = s.name;
+      const size = document.createElement("span");
+      size.className = "s-size";
+      size.textContent = fmtSize(s.size);
+      const remove = document.createElement("button");
+      remove.className = "s-remove";
+      remove.textContent = "✕";
+      remove.title = "Remove sample";
+      remove.addEventListener("click", () => {
+        samples.splice(i, 1);
+        renderSamples();
+      });
+      item.append(name, size, remove);
+      els.sampleList.appendChild(item);
+    });
+    updateCloneButton();
+  }
+
+  function updateCloneButton() {
+    els.cloneBtn.disabled = !(
+      samples.length > 0 &&
+      els.cloneName.value.trim() &&
+      els.cloneConsent.checked
+    );
+  }
+  els.cloneName.addEventListener("input", updateCloneButton);
+  els.cloneConsent.addEventListener("change", updateCloneButton);
+
+  function addFiles(fileList) {
+    for (const file of fileList) {
+      if (samples.length >= 25) {
+        toast("Maximum of 25 samples reached.", true);
+        break;
+      }
+      samples.push({ file, name: file.name, size: file.size });
+    }
+    renderSamples();
+  }
+
+  els.dropzone.addEventListener("click", () => els.cloneFiles.click());
+  els.cloneFiles.addEventListener("change", () => {
+    addFiles(els.cloneFiles.files);
+    els.cloneFiles.value = "";
+  });
+  ["dragover", "dragenter"].forEach((evt) =>
+    els.dropzone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      els.dropzone.classList.add("dragover");
+    })
+  );
+  ["dragleave", "drop"].forEach((evt) =>
+    els.dropzone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      els.dropzone.classList.remove("dragover");
+    })
+  );
+  els.dropzone.addEventListener("drop", (e) => addFiles(e.dataTransfer.files));
+
+  // Microphone recording
+  async function toggleRecording() {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      mediaRecorder.stop();
+      return;
+    }
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      return toast("Microphone recording is not supported in this browser.", true);
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size) recordChunks.push(e.data);
+      };
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(recordChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+        const n = samples.filter((s) => s.name.startsWith("recording-")).length + 1;
+        samples.push({ file: blob, name: `recording-${n}.webm`, size: blob.size });
+        renderSamples();
+        els.recordBtn.classList.remove("recording");
+        els.recordBtn.textContent = "🎤 Record sample";
+        toast("Recording added to samples.");
+      };
+      mediaRecorder.start();
+      els.recordBtn.classList.add("recording");
+      els.recordBtn.textContent = "■ Stop recording";
+    } catch (err) {
+      toast("Could not access microphone: " + err.message, true);
+    }
+  }
+  els.recordBtn.addEventListener("click", toggleRecording);
+
+  async function deleteVoice(v) {
+    if (!window.confirm(`Delete the voice "${v.name}"? This can't be undone.`)) return;
+    try {
+      const res = await fetch(`${apiBase()}/voices/${v.voice_id}`, {
+        method: "DELETE",
+        headers: { ...apiAuthHeaders() },
+      });
+      if (!res.ok) throw new Error(`${state.engine === "local" ? "Server" : "API"} returned ${res.status}`);
+      if (state.selectedApiVoice && state.selectedApiVoice.voice_id === v.voice_id) {
+        state.selectedApiVoice = null;
+      }
+      await refreshApiVoices();
+      if (!state.selectedApiVoice) state.selectedApiVoice = state.apiVoices[0] || null;
+      renderVoices();
+      toast(`Deleted "${v.name}".`);
+    } catch (err) {
+      toast("Delete failed: " + err.message, true);
+    }
+  }
+
+  async function refreshApiVoices(selectVoiceId) {
+    const res = await fetch(`${apiBase()}/voices`, { headers: { ...apiAuthHeaders() } });
+    if (!res.ok) return;
+    const data = await res.json();
+    state.apiVoices = data.voices || [];
+    if (selectVoiceId) {
+      state.selectedApiVoice =
+        state.apiVoices.find((v) => v.voice_id === selectVoiceId) || state.selectedApiVoice;
+    }
+    renderVoices();
+  }
+
+  async function createClone() {
+    const isLocal = state.engine === "local";
+    if (!apiReady()) {
+      return toast(isLocal
+        ? "Connect to your local voice server first."
+        : "Connect your ElevenLabs API key first.", true);
+    }
+    if (!els.cloneConsent.checked) return toast("Please confirm you have consent to clone this voice.", true);
+    const name = els.cloneName.value.trim();
+    if (!name || !samples.length) return;
+
+    els.cloneBtn.disabled = true;
+    els.cloneBtn.textContent = "Cloning…";
+    els.cloneStatus.textContent = isLocal
+      ? "Building voice clone on your machine…"
+      : "Uploading samples and creating voice…";
+    els.cloneStatus.className = "api-status";
+    try {
+      const form = new FormData();
+      form.append("name", name);
+      form.append("description", "Created with VoxStudio voice cloning");
+      samples.forEach((s) => form.append("files", s.file, s.name));
+
+      const res = await fetch(`${apiBase()}/voices/add`, {
+        method: "POST",
+        headers: { ...apiAuthHeaders() },
+        body: form,
+      });
+      if (!res.ok) {
+        let detail = `${isLocal ? "Server" : "API"} returned ${res.status}`;
+        try {
+          const body = await res.json();
+          if (body.detail) detail = typeof body.detail === "string" ? body.detail : body.detail.message || detail;
+        } catch (_) { /* non-JSON error body */ }
+        if (!isLocal && (res.status === 401 || res.status === 403)) {
+          detail += " — note: instant voice cloning requires a paid ElevenLabs plan (Starter or above).";
+        }
+        throw new Error(detail);
+      }
+      const data = await res.json();
+      els.cloneStatus.textContent = `Voice "${name}" created. It's now selected in your voice list.`;
+      els.cloneStatus.className = "api-status ok";
+      samples.length = 0;
+      els.cloneName.value = "";
+      els.cloneConsent.checked = false;
+      renderSamples();
+      await refreshApiVoices(data.voice_id);
+      toast(`Voice clone "${name}" is ready — hit Generate to hear it.`);
+    } catch (err) {
+      els.cloneStatus.textContent = "Cloning failed: " + err.message;
+      els.cloneStatus.className = "api-status err";
+    } finally {
+      els.cloneBtn.textContent = "✦ Create voice clone";
+      updateCloneButton();
+    }
+  }
+  els.cloneBtn.addEventListener("click", createClone);
 
   // ---------- Init ----------
   setEngine("browser");

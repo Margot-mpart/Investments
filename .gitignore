@@ -1,0 +1,10 @@
+# Local voice engine: cloned-voice storage created at runtime by server.py
+voices/
+voxstudio-server.log
+voxstudio-server.err
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
