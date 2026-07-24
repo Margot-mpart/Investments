@@ -97,6 +97,23 @@ audio) — e.g. `brew install ffmpeg`, `apt install ffmpeg`, or
 caches it. A GPU is optional but makes synthesis much faster; CPU works but is
 slow.
 
+### If setup fails
+
+`coqui-tts` leaves several heavy dependencies optional, and its newest
+compatible versions drift, so a bare install can fail. `requirements.txt` pins
+what's actually needed — all four of these were hit and fixed by doing a clean
+install from scratch:
+
+| Symptom | Cause |
+|---|---|
+| `ModuleNotFoundError: No module named 'torch'` | PyTorch isn't installed automatically |
+| `ModuleNotFoundError: No module named 'torchaudio'` | torchaudio isn't either |
+| `ImportError: cannot import name 'isin_mps_friendly'` | `transformers` 5.x dropped it — pinned to `<5` |
+| `torchcodec library is required for audio IO` | PyTorch ≥ 2.9 needs `torchcodec` |
+
+If you still hit trouble, `/voxstudio` in Claude Code will read the actual error
+and sort it out interactively.
+
 ### 2. Use it in the app
 
 1. Open `index.html` and pick the **Local · no API** engine.

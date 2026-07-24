@@ -13,6 +13,14 @@
 torch>=2.1
 torchaudio>=2.1
 
+# transformers 5.x removed `isin_mps_friendly`, which coqui-tts imports, so a
+# fresh install otherwise fails at model load with an ImportError.
+transformers<5
+
+# PyTorch >= 2.9 delegates audio IO to torchcodec; without it, loading the
+# XTTS model errors out.
+torchcodec>=0.1
+
 coqui-tts>=0.24.1
 fastapi>=0.110
 uvicorn>=0.29
