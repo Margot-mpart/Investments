@@ -400,6 +400,103 @@
     font-family: inherit;
     margin-bottom: 4px;
   }
+
+  /* ---------- Voice cloning ---------- */
+  .clone-card input[type="text"] {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 13px;
+    outline: none;
+    font-family: inherit;
+    margin-bottom: 10px;
+  }
+  .clone-card input[type="text"]:focus { border-color: var(--accent); }
+  .dropzone {
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    padding: 18px 12px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+    margin-bottom: 10px;
+  }
+  .dropzone:hover, .dropzone.dragover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--text);
+  }
+  .sample-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .sample-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+  .sample-item .s-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sample-item .s-size { color: var(--text-dim); flex-shrink: 0; }
+  .sample-item .s-remove {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+    line-height: 1;
+  }
+  .sample-item .s-remove:hover { color: var(--danger); }
+  .record-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .record-row .btn { flex: 1; justify-content: center; padding: 9px 10px; font-size: 13px; }
+  .btn-record.recording {
+    background: var(--danger);
+    color: #fff;
+    border-color: var(--danger);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.65; }
+  }
+  .consent-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin-bottom: 10px;
+  }
+  .consent-row input[type="checkbox"] {
+    margin-top: 2px;
+    accent-color: var(--accent);
+    width: 15px; height: 15px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .clone-hint { font-size: 12px; color: var(--text-dim); line-height: 1.5; margin-bottom: 10px; }
+  .voice-badge {
+    font-size: 10px;
+    background: var(--accent-soft);
+    color: var(--accent-hover);
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
 </style>
 </head>
 <body>
@@ -478,6 +575,34 @@
       </div>
     </div>
 
+    <div class="card api-card clone-card" id="cloneCard">
+      <h2>Clone a voice</h2>
+      <p class="clone-hint">
+        Create an instant voice clone from 1–2 minutes of clean speech.
+        Upload audio files or record a sample right here, and the clone is
+        added to your ElevenLabs voice library.
+      </p>
+      <input type="text" id="cloneName" placeholder="Voice name (e.g. My voice)" maxlength="100" />
+      <div class="dropzone" id="dropzone">
+        Drop audio files here or click to browse<br />
+        <small>mp3, wav, m4a, webm — up to 25 files</small>
+      </div>
+      <input type="file" id="cloneFiles" accept="audio/*,video/webm" multiple hidden />
+      <div class="record-row">
+        <button class="btn btn-ghost btn-record" id="recordBtn">🎤 Record sample</button>
+      </div>
+      <div class="sample-list" id="sampleList"></div>
+      <label class="consent-row">
+        <input type="checkbox" id="cloneConsent" />
+        <span>I confirm this is my own voice, or I have the speaker's explicit
+        consent to clone it, and my use complies with the
+        <a href="https://elevenlabs.io/terms-of-use" target="_blank" rel="noopener" style="color:var(--accent)">ElevenLabs terms</a>
+        and applicable law.</span>
+      </label>
+      <button class="btn btn-primary btn-small" id="cloneBtn" disabled>✦ Create voice clone</button>
+      <div class="api-status" id="cloneStatus"></div>
+    </div>
+
     <div class="card" id="browserSettings">
       <h2>Voice settings</h2>
       <div class="slider-row">
@@ -550,6 +675,9 @@
     modelSelect: $("modelSelect"),
     historySection: $("historySection"), historyList: $("historyList"),
     toast: $("toast"),
+    cloneName: $("cloneName"), cloneFiles: $("cloneFiles"), dropzone: $("dropzone"),
+    sampleList: $("sampleList"), recordBtn: $("recordBtn"),
+    cloneConsent: $("cloneConsent"), cloneBtn: $("cloneBtn"), cloneStatus: $("cloneStatus"),
     rate: $("rate"), pitch: $("pitch"), volume: $("volume"),
     stability: $("stability"), similarity: $("similarity"), style: $("style"),
   };
@@ -633,6 +761,12 @@
       const name = document.createElement("div");
       name.className = "voice-name";
       name.textContent = v.name;
+      if (state.engine === "eleven" && (v.category === "cloned" || v.category === "generated")) {
+        const badge = document.createElement("span");
+        badge.className = "voice-badge";
+        badge.textContent = v.category === "cloned" ? "CLONE" : "GENERATED";
+        name.appendChild(badge);
+      }
       const lang = document.createElement("div");
       lang.className = "voice-lang";
       lang.textContent =
@@ -689,6 +823,7 @@
     els.engineEleven.classList.toggle("active", isEleven);
     els.apiCard.classList.toggle("visible", isEleven);
     els.modelCard.classList.toggle("visible", isEleven);
+    $("cloneCard").classList.toggle("visible", isEleven);
     els.elevenSettings.classList.toggle("visible", isEleven);
     els.browserSettings.style.display = isEleven ? "none" : "";
     els.downloadBtn.title = isEleven
@@ -900,6 +1035,180 @@
       els.historyList.appendChild(item);
     });
   }
+
+  // ---------- Voice cloning (ElevenLabs Instant Voice Cloning) ----------
+  const samples = []; // { file: File|Blob, name, size }
+  let mediaRecorder = null;
+  let recordChunks = [];
+
+  function fmtSize(bytes) {
+    if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  function renderSamples() {
+    els.sampleList.innerHTML = "";
+    samples.forEach((s, i) => {
+      const item = document.createElement("div");
+      item.className = "sample-item";
+      const name = document.createElement("span");
+      name.className = "s-name";
+      name.textContent = "🎵 " + s.name;
+      name.title = s.name;
+      const size = document.createElement("span");
+      size.className = "s-size";
+      size.textContent = fmtSize(s.size);
+      const remove = document.createElement("button");
+      remove.className = "s-remove";
+      remove.textContent = "✕";
+      remove.title = "Remove sample";
+      remove.addEventListener("click", () => {
+        samples.splice(i, 1);
+        renderSamples();
+      });
+      item.append(name, size, remove);
+      els.sampleList.appendChild(item);
+    });
+    updateCloneButton();
+  }
+
+  function updateCloneButton() {
+    els.cloneBtn.disabled = !(
+      samples.length > 0 &&
+      els.cloneName.value.trim() &&
+      els.cloneConsent.checked
+    );
+  }
+  els.cloneName.addEventListener("input", updateCloneButton);
+  els.cloneConsent.addEventListener("change", updateCloneButton);
+
+  function addFiles(fileList) {
+    for (const file of fileList) {
+      if (samples.length >= 25) {
+        toast("Maximum of 25 samples reached.", true);
+        break;
+      }
+      samples.push({ file, name: file.name, size: file.size });
+    }
+    renderSamples();
+  }
+
+  els.dropzone.addEventListener("click", () => els.cloneFiles.click());
+  els.cloneFiles.addEventListener("change", () => {
+    addFiles(els.cloneFiles.files);
+    els.cloneFiles.value = "";
+  });
+  ["dragover", "dragenter"].forEach((evt) =>
+    els.dropzone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      els.dropzone.classList.add("dragover");
+    })
+  );
+  ["dragleave", "drop"].forEach((evt) =>
+    els.dropzone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      els.dropzone.classList.remove("dragover");
+    })
+  );
+  els.dropzone.addEventListener("drop", (e) => addFiles(e.dataTransfer.files));
+
+  // Microphone recording
+  async function toggleRecording() {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      mediaRecorder.stop();
+      return;
+    }
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      return toast("Microphone recording is not supported in this browser.", true);
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size) recordChunks.push(e.data);
+      };
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(recordChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+        const n = samples.filter((s) => s.name.startsWith("recording-")).length + 1;
+        samples.push({ file: blob, name: `recording-${n}.webm`, size: blob.size });
+        renderSamples();
+        els.recordBtn.classList.remove("recording");
+        els.recordBtn.textContent = "🎤 Record sample";
+        toast("Recording added to samples.");
+      };
+      mediaRecorder.start();
+      els.recordBtn.classList.add("recording");
+      els.recordBtn.textContent = "■ Stop recording";
+    } catch (err) {
+      toast("Could not access microphone: " + err.message, true);
+    }
+  }
+  els.recordBtn.addEventListener("click", toggleRecording);
+
+  async function refreshElevenVoices(selectVoiceId) {
+    const res = await fetch(`${API_BASE}/voices`, { headers: { "xi-api-key": state.apiKey } });
+    if (!res.ok) return;
+    const data = await res.json();
+    state.elevenVoices = data.voices || [];
+    if (selectVoiceId) {
+      state.selectedElevenVoice =
+        state.elevenVoices.find((v) => v.voice_id === selectVoiceId) || state.selectedElevenVoice;
+    }
+    renderVoices();
+  }
+
+  async function createClone() {
+    if (!state.apiKey) return toast("Connect your ElevenLabs API key first.", true);
+    if (!els.cloneConsent.checked) return toast("Please confirm you have consent to clone this voice.", true);
+    const name = els.cloneName.value.trim();
+    if (!name || !samples.length) return;
+
+    els.cloneBtn.disabled = true;
+    els.cloneBtn.textContent = "Cloning…";
+    els.cloneStatus.textContent = "Uploading samples and creating voice…";
+    els.cloneStatus.className = "api-status";
+    try {
+      const form = new FormData();
+      form.append("name", name);
+      form.append("description", "Created with VoxStudio instant voice cloning");
+      samples.forEach((s) => form.append("files", s.file, s.name));
+
+      const res = await fetch(`${API_BASE}/voices/add`, {
+        method: "POST",
+        headers: { "xi-api-key": state.apiKey },
+        body: form,
+      });
+      if (!res.ok) {
+        let detail = `API returned ${res.status}`;
+        try {
+          const body = await res.json();
+          if (body.detail) detail = typeof body.detail === "string" ? body.detail : body.detail.message || detail;
+        } catch (_) { /* non-JSON error body */ }
+        if (res.status === 401 || res.status === 403) {
+          detail += " — note: instant voice cloning requires a paid ElevenLabs plan (Starter or above).";
+        }
+        throw new Error(detail);
+      }
+      const data = await res.json();
+      els.cloneStatus.textContent = `Voice "${name}" created. It's now selected in your voice list.`;
+      els.cloneStatus.className = "api-status ok";
+      samples.length = 0;
+      els.cloneName.value = "";
+      els.cloneConsent.checked = false;
+      renderSamples();
+      await refreshElevenVoices(data.voice_id);
+      toast(`Voice clone "${name}" is ready — hit Generate to hear it.`);
+    } catch (err) {
+      els.cloneStatus.textContent = "Cloning failed: " + err.message;
+      els.cloneStatus.className = "api-status err";
+    } finally {
+      els.cloneBtn.textContent = "✦ Create voice clone";
+      updateCloneButton();
+    }
+  }
+  els.cloneBtn.addEventListener("click", createClone);
 
   // ---------- Init ----------
   setEngine("browser");
