@@ -108,6 +108,35 @@ slow.
    auto-selected. Type text, hit **Generate speech**, and you'll hear it — and
    can download the WAV.
 
+### Higher quality: the VoxCPM engine (optional, NVIDIA GPU)
+
+The local engine ships with two interchangeable models. It picks automatically:
+
+| | Coqui XTTS-v2 (default) | VoxCPM2 (optional) |
+|---|---|---|
+| Audio quality | 24 kHz | **48 kHz** |
+| Languages | 17 | **30 + Chinese dialects** |
+| License | Non-commercial (CPML) | **Apache-2.0 (commercial OK)** |
+| Hardware | CPU or GPU | **NVIDIA GPU, ~8 GB VRAM, CUDA ≥ 12** |
+
+Both clone zero-shot from a short reference clip, so nothing else about the app
+changes. The server auto-selects **VoxCPM** when a CUDA GPU and the `voxcpm`
+package are both present, and falls back to **XTTS-v2** otherwise. Force a
+choice with `VOXSTUDIO_ENGINE=voxcpm` or `VOXSTUDIO_ENGINE=xtts`.
+
+To add VoxCPM (after the base setup):
+
+- **Windows (NVIDIA):** double-click **`upgrade-voxcpm-windows.bat`**, then
+  restart the server (`stop-windows.bat`, then `start-windows.bat`).
+- **Any OS / manual:** `pip install -r requirements-voxcpm.txt` into the same
+  environment, then restart `server.py`.
+- **Claude Code:** `/voxstudio` detects your GPU and offers to install it.
+
+When connected, the app's status line shows which engine is live —
+`VoxCPM2 (48 kHz)` or `Coqui XTTS-v2 (24 kHz)`. VoxCPM needs an NVIDIA card;
+on a Mac or a GPU-less PC it won't run and the app stays on XTTS-v2.
+[VoxCPM is from OpenBMB](https://github.com/OpenBMB/VoxCPM).
+
 ### Language
 
 XTTS-v2 is multilingual. The **Speech language** card lets you pick from 17

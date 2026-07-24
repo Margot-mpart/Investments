@@ -85,6 +85,17 @@ if errorlevel 1 (
   echo Voice server already running.
 )
 
+REM --- Tip: offer the VoxCPM upgrade if an NVIDIA GPU is present but not yet installed ---
+where nvidia-smi >nul 2>&1
+if not errorlevel 1 (
+  "%VPY%" -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('voxcpm') else 1)" >nul 2>&1
+  if errorlevel 1 (
+    echo.
+    echo TIP: You have an NVIDIA GPU. For higher-quality 48 kHz voices in more
+    echo      languages, double-click upgrade-voxcpm-windows.bat once.
+  )
+)
+
 REM --- Open the studio ---
 start "" index.html
 

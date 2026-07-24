@@ -1,0 +1,11 @@
+# Optional high-quality engine: VoxCPM2 (OpenBMB), Apache-2.0.
+#
+# Install this IN ADDITION to requirements.txt only if you have an NVIDIA GPU
+# (~8 GB VRAM, CUDA >= 12.0). The server auto-selects VoxCPM when it and a CUDA
+# GPU are both present; otherwise it falls back to Coqui XTTS-v2. Force a choice
+# with the VOXSTUDIO_ENGINE=voxcpm|xtts environment variable.
+#
+# Python 3.10-3.12, PyTorch >= 2.5.0 (install the CUDA build of torch for GPU).
+
+voxcpm>=0.1.0
+soundfile>=0.12

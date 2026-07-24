@@ -958,7 +958,14 @@
       state.localReady = true;
       state.apiVoices = data.voices || [];
       state.selectedApiVoice = state.apiVoices[0] || null;
-      els.localStatus.textContent = `Connected — ${state.apiVoices.length} voice(s) available.`;
+      // Ask the server which engine it's using (VoxCPM vs XTTS) for the status line.
+      let engineLabel = "";
+      try {
+        const info = await (await fetch(`${state.localUrl.replace(/\/+$/, "")}/`)).json();
+        if (info && info.engine_label) engineLabel = " · " + info.engine_label;
+      } catch (_) { /* root endpoint optional */ }
+      els.localStatus.textContent =
+        `Connected — ${state.apiVoices.length} voice(s)${engineLabel}.`;
       els.localStatus.className = "api-status ok";
       renderVoices();
     } catch (err) {

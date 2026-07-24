@@ -75,6 +75,19 @@ disk — tell the user it's expected, and let it run to completion. If PyTorch
 fails to install, report the exact error; it's usually a Python-version issue
 (fall back to 3.11).
 
+### 3b. Optional high-quality engine (VoxCPM, NVIDIA only)
+Check for an NVIDIA GPU with `nvidia-smi`. If present, offer to install the
+higher-quality **VoxCPM2** engine (48 kHz, 30 languages, Apache-2.0) on top of
+the base install:
+- macOS/Linux: `./.venv/bin/python -m pip install -r requirements-voxcpm.txt`
+- Windows: `.\.venv\Scripts\python -m pip install -r requirements-voxcpm.txt`
+
+The server auto-selects VoxCPM whenever a CUDA GPU and the `voxcpm` package are
+both present, and falls back to Coqui XTTS-v2 otherwise (force a choice with the
+`VOXSTUDIO_ENGINE=voxcpm|xtts` environment variable). If VoxCPM install fails or
+there's no NVIDIA GPU, skip it — the base engine still works. Do not spend long
+fighting CUDA/torch version conflicts; report the error and continue with XTTS.
+
 ### 4. Launch the server
 Start it in the background and keep the log:
 - macOS/Linux:

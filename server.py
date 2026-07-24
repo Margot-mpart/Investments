@@ -39,8 +39,15 @@ os.environ.setdefault("COQUI_TOS_AGREED", "1")
 VOICES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voices")
 os.makedirs(VOICES_DIR, exist_ok=True)
 
-MODEL_NAME = "tts_models/multilingual/multi-dataset/xtts_v2"
+XTTS_MODEL = "tts_models/multilingual/multi-dataset/xtts_v2"
+VOXCPM_MODEL = os.environ.get("VOXCPM_MODEL", "openbmb/VoxCPM2")
 DEFAULT_LANGUAGE = os.environ.get("VOXSTUDIO_LANG", "en")
+
+# Which synthesis engine to use:
+#   "auto"   (default) -> VoxCPM if an NVIDIA GPU and the voxcpm package are
+#                         both available, otherwise Coqui XTTS-v2 (CPU-capable).
+#   "voxcpm" / "xtts"  -> force one.
+ENGINE_PREF = os.environ.get("VOXSTUDIO_ENGINE", "auto").lower()
 
 app = FastAPI(title="VoxStudio local voice engine")
 
@@ -54,22 +61,81 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Lazy model loading — the first request pays the (large) load cost, not import.
+# Engine selection + lazy loading.
+#
+# Both engines clone zero-shot: reference clip + text -> audio. They are wrapped
+# behind a single `synth(text, reference_wav, language) -> (samples, sample_rate)`
+# callable so the rest of the server (and the whole front-end) is engine-agnostic.
+# The first synthesis request pays the (large) model-load cost, not import.
 # ---------------------------------------------------------------------------
-_tts = None
+def _cuda_available() -> bool:
+    try:
+        import torch
+
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return False
 
 
-def get_tts():
-    global _tts
-    if _tts is None:
+def _voxcpm_importable() -> bool:
+    import importlib.util
+
+    return importlib.util.find_spec("voxcpm") is not None
+
+
+def selected_engine() -> str:
+    """Resolve which engine will be used — cheap, does not load any model."""
+    if ENGINE_PREF in ("voxcpm", "xtts"):
+        return ENGINE_PREF
+    if _cuda_available() and _voxcpm_importable():
+        return "voxcpm"
+    return "xtts"
+
+
+def engine_model_id(name: str) -> str:
+    return VOXCPM_MODEL if name == "voxcpm" else XTTS_MODEL
+
+
+_engine = None  # {"name": str, "synth": callable, "model": str}
+
+
+def get_engine():
+    global _engine
+    if _engine is not None:
+        return _engine
+
+    name = selected_engine()
+
+    if name == "voxcpm":
+        from voxcpm import VoxCPM
+
+        print(f"[voxstudio] loading VoxCPM ({VOXCPM_MODEL}) on GPU (first run downloads the model)…")
+        model = VoxCPM.from_pretrained(VOXCPM_MODEL, load_denoiser=False)
+        sample_rate = int(getattr(getattr(model, "tts_model", None), "sample_rate", 48000))
+
+        def synth(text, reference_wav, language=None):
+            # VoxCPM detects language from the text itself; `language` is ignored.
+            wav = model.generate(text=text, reference_wav_path=reference_wav)
+            return wav, sample_rate
+
+        _engine = {"name": "voxcpm", "synth": synth, "model": VOXCPM_MODEL}
+    else:
         import torch
         from TTS.api import TTS
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"[voxstudio] loading {MODEL_NAME} on {device} (first run downloads ~1.8 GB)…")
-        _tts = TTS(MODEL_NAME).to(device)
-        print("[voxstudio] model ready.")
-    return _tts
+        print(f"[voxstudio] loading Coqui XTTS-v2 on {device} (first run downloads ~1.8 GB)…")
+        tts = TTS(XTTS_MODEL).to(device)
+        sample_rate = int(getattr(getattr(tts, "synthesizer", None), "output_sample_rate", 24000))
+
+        def synth(text, reference_wav, language=None):
+            wav = tts.tts(text=text, speaker_wav=reference_wav, language=language or DEFAULT_LANGUAGE)
+            return wav, sample_rate
+
+        _engine = {"name": "xtts", "synth": synth, "model": XTTS_MODEL}
+
+    print(f"[voxstudio] engine ready: {_engine['name']} ({_engine['model']}).")
+    return _engine
 
 
 # ---------------------------------------------------------------------------
@@ -201,17 +267,12 @@ def text_to_speech(voice_id: str, req: TTSRequest):
     if not os.path.isfile(ref_path):
         raise HTTPException(status_code=404, detail="Voice reference audio is missing.")
 
-    tts = get_tts()
+    engine = get_engine()
     try:
-        wav = tts.tts(
-            text=req.text,
-            speaker_wav=ref_path,
-            language=req.language or DEFAULT_LANGUAGE,
-        )
+        wav, sample_rate = engine["synth"](req.text, ref_path, req.language)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Synthesis failed: {exc}")
 
-    sample_rate = getattr(getattr(tts, "synthesizer", None), "output_sample_rate", 24000)
     audio_bytes = _floats_to_wav_bytes(wav, sample_rate)
     return Response(content=audio_bytes, media_type="audio/wav")
 
@@ -229,7 +290,16 @@ def delete_voice(voice_id: str):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "voices": len(list_voices()), "model": MODEL_NAME}
+    name = selected_engine()
+    label = "VoxCPM2 (48 kHz)" if name == "voxcpm" else "Coqui XTTS-v2 (24 kHz)"
+    return {
+        "status": "ok",
+        "voices": len(list_voices()),
+        "engine": name,
+        "engine_label": label,
+        "model": engine_model_id(name),
+        "loaded": _engine is not None,
+    }
 
 
 if __name__ == "__main__":
