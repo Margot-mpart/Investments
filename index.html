@@ -305,6 +305,22 @@
   }
   .voice-lang { font-size: 11px; color: var(--text-dim); }
   .voice-empty { color: var(--text-dim); font-size: 13px; padding: 8px 4px; }
+  .voice-del {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 6px;
+    opacity: 0;
+    flex-shrink: 0;
+    transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+  }
+  .voice-item:hover .voice-del { opacity: 1; }
+  .voice-del:hover { color: var(--danger); background: var(--panel); }
 
   /* Sliders */
   .slider-row { margin-bottom: 16px; }
@@ -643,6 +659,33 @@
       </div>
     </div>
 
+    <div class="card local-card" id="localSettings">
+      <h2>Speech language</h2>
+      <select id="langSelect">
+        <option value="en">English</option>
+        <option value="es">Spanish</option>
+        <option value="fr">French</option>
+        <option value="de">German</option>
+        <option value="it">Italian</option>
+        <option value="pt">Portuguese</option>
+        <option value="pl">Polish</option>
+        <option value="tr">Turkish</option>
+        <option value="ru">Russian</option>
+        <option value="nl">Dutch</option>
+        <option value="cs">Czech</option>
+        <option value="ar">Arabic</option>
+        <option value="zh-cn">Chinese</option>
+        <option value="hu">Hungarian</option>
+        <option value="ko">Korean</option>
+        <option value="ja">Japanese</option>
+        <option value="hi">Hindi</option>
+      </select>
+      <p class="api-hint" style="margin-top:8px">
+        XTTS-v2 is multilingual and can speak any of these in a cloned voice,
+        regardless of the language the voice was sampled in.
+      </p>
+    </div>
+
     <div class="card api-card" id="elevenSettings">
       <h2>Voice settings</h2>
       <div class="slider-row">
@@ -701,6 +744,7 @@
     apiKey: $("apiKey"), connectBtn: $("connectBtn"), apiStatus: $("apiStatus"),
     modelSelect: $("modelSelect"),
     localUrl: $("localUrl"), localConnectBtn: $("localConnectBtn"), localStatus: $("localStatus"),
+    localSettings: $("localSettings"), langSelect: $("langSelect"),
     cloneCard: $("cloneCard"), cloneHeading: $("cloneHeading"),
     historySection: $("historySection"), historyList: $("historyList"),
     toast: $("toast"),
@@ -809,6 +853,20 @@
       meta.append(name, lang);
       item.append(avatar, meta);
 
+      // User-created voices (clones/generated) can be deleted from the account/server.
+      if (!isBrowser && (v.category === "cloned" || v.category === "generated")) {
+        const del = document.createElement("button");
+        del.className = "voice-del";
+        del.textContent = "🗑";
+        del.title = `Delete "${v.name}"`;
+        del.setAttribute("aria-label", `Delete ${v.name}`);
+        del.addEventListener("click", (e) => {
+          e.stopPropagation();
+          deleteVoice(v);
+        });
+        item.appendChild(del);
+      }
+
       item.addEventListener("click", () => {
         if (isBrowser) state.selectedBrowserVoice = v;
         else state.selectedApiVoice = v;
@@ -858,6 +916,7 @@
     els.apiCard.classList.toggle("visible", isEleven);
     els.modelCard.classList.toggle("visible", isEleven);
     els.localCard.classList.toggle("visible", isLocal);
+    els.localSettings.classList.toggle("visible", isLocal);
     els.cloneCard.classList.toggle("visible", isApi);
     els.elevenSettings.classList.toggle("visible", isEleven);
     els.browserSettings.style.display = engine === "browser" ? "" : "none";
@@ -951,9 +1010,9 @@
     const isLocal = state.engine === "local";
     setGenerating(true, "Generating…");
     try {
-      // ElevenLabs takes model_id + voice_settings; the local server just needs text.
+      // ElevenLabs takes model_id + voice_settings; the local server takes text + language.
       const body = isLocal
-        ? { text }
+        ? { text, language: els.langSelect.value }
         : {
             text,
             model_id: els.modelSelect.value,
@@ -1228,6 +1287,26 @@
     }
   }
   els.recordBtn.addEventListener("click", toggleRecording);
+
+  async function deleteVoice(v) {
+    if (!window.confirm(`Delete the voice "${v.name}"? This can't be undone.`)) return;
+    try {
+      const res = await fetch(`${apiBase()}/voices/${v.voice_id}`, {
+        method: "DELETE",
+        headers: { ...apiAuthHeaders() },
+      });
+      if (!res.ok) throw new Error(`${state.engine === "local" ? "Server" : "API"} returned ${res.status}`);
+      if (state.selectedApiVoice && state.selectedApiVoice.voice_id === v.voice_id) {
+        state.selectedApiVoice = null;
+      }
+      await refreshApiVoices();
+      if (!state.selectedApiVoice) state.selectedApiVoice = state.apiVoices[0] || null;
+      renderVoices();
+      toast(`Deleted "${v.name}".`);
+    } catch (err) {
+      toast("Delete failed: " + err.message, true);
+    }
+  }
 
   async function refreshApiVoices(selectVoiceId) {
     const res = await fetch(`${apiBase()}/voices`, { headers: { ...apiAuthHeaders() } });

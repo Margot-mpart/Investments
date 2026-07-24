@@ -74,6 +74,22 @@ slow.
    auto-selected. Type text, hit **Generate speech**, and you'll hear it — and
    can download the WAV.
 
+### Language
+
+XTTS-v2 is multilingual. The **Speech language** card lets you pick from 17
+languages (English, Spanish, French, German, Italian, Portuguese, Polish,
+Turkish, Russian, Dutch, Czech, Arabic, Chinese, Hungarian, Korean, Japanese,
+Hindi). A cloned voice can speak any of them, regardless of the language it was
+sampled in — clone an English sample and have it read Japanese in the same
+voice.
+
+### Managing voices
+
+Hover any cloned voice in the list and click the 🗑 icon to delete it. This
+calls the server's `DELETE /v1/voices/{voice_id}` endpoint and removes the
+stored reference clip from `./voices/`. (Deleting works for ElevenLabs clones
+too, via the same button.)
+
 Cloning here is *zero-shot*: your samples are stored locally under `./voices/`
 as a reference clip, and XTTS-v2 conditions on that clip at synthesis time.
 Nothing is uploaded and no model is fine-tuned.
