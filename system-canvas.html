@@ -1,0 +1,3785 @@
+<!doctype html>
+<html lang="en" data-theme="site">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>System Canvas — bird's-eye builder</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@500;700;800&family=Almarai:wght@300;400;700;800&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ============================================================
+   System Canvas — an infinite, auto-populating diagram board.
+   Built for Video #1 "The Complete AI Investing System".
+   Three themes: dark (01 Systems, gold) + light (trading-os, lime)
+   + site (matches the episode website — Night #0A0B0D / lime #C6F24E /
+   Almarai + Instrument Serif). meta.theme:"site" selects it.
+   ============================================================ */
+      :root {
+        --font-display: "Space Grotesk", system-ui, sans-serif;
+        --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+        --font-serif: "Instrument Serif", Georgia, serif;
+      }
+      html[data-theme="dark"] {
+        --bg: #0f0f0f;
+        --grid: rgba(255, 208, 0, 0.09);
+        --card: #1c1b1a;
+        --card-2: #2a2929;
+        --card-3: #343332;
+        --border: #38352f;
+        --border-strong: #524c3e;
+        --fg: #f6f5f2;
+        --fg-2: #aba9a4;
+        --fg-3: #6f6b64;
+        --accent: #ffd000;
+        --accent-2: #ffb700;
+        --accent-ink: #0f0f0f;
+        --accent-soft: rgba(255, 208, 0, 0.14);
+        --accent-line: rgba(255, 208, 0, 0.55);
+        --caret: #ff4d4d;
+        --edge: #6a6459;
+        --edge-strong: #ffd000;
+        --shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+        --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.4);
+        --panel: rgba(20, 19, 18, 0.86);
+      }
+      html[data-theme="light"] {
+        --bg: #f6f7f9;
+        --grid: rgba(16, 18, 22, 0.07);
+        --card: #ffffff;
+        --card-2: #f1f3f6;
+        --card-3: #e9edf2;
+        --border: #e0e3e9;
+        --border-strong: #cfd4dc;
+        --fg: #0a0b0d;
+        --fg-2: #5b626b;
+        --fg-3: #9097a0;
+        --accent: #c6f24e;
+        --accent-2: #b6e83a;
+        --accent-ink: #23370a;
+        --accent-soft: rgba(198, 242, 78, 0.28);
+        --accent-line: rgba(120, 170, 20, 0.6);
+        --caret: #ff4d4d;
+        --edge: #b7bec8;
+        --edge-strong: #6c8a1e;
+        --shadow: 0 18px 48px rgba(16, 18, 22, 0.14);
+        --shadow-sm: 0 4px 14px rgba(16, 18, 22, 0.09);
+        --panel: rgba(255, 255, 255, 0.86);
+      }
+      /* ---- site theme: matches the episode website (EpisodeHub) ----
+         Night #0A0B0D canvas, acid-lime #C6F24E as the single accent,
+         warm off-white #E1E0CC body text, Almarai display + Instrument
+         Serif italic for accent phrases. Selected by meta.theme:"site". */
+      html[data-theme="site"] {
+        --font-display: "Almarai", system-ui, sans-serif;
+        --bg: #0a0b0d;
+        --grid: rgba(198, 242, 78, 0.06);
+        --card: #101010;
+        --card-2: #212121;
+        --card-3: #2b2b2b;
+        --border: rgba(225, 224, 204, 0.12);
+        --border-strong: rgba(225, 224, 204, 0.24);
+        --fg: #e1e0cc;
+        --fg-2: rgba(225, 224, 204, 0.66);
+        --fg-3: rgba(225, 224, 204, 0.4);
+        --accent: #c6f24e;
+        --accent-2: #d2f86b;
+        --accent-ink: #0a0b0d;
+        --accent-soft: rgba(198, 242, 78, 0.14);
+        --accent-line: rgba(198, 242, 78, 0.4);
+        --caret: #ff4d4d;
+        --edge: rgba(225, 224, 204, 0.35);
+        --edge-strong: #c6f24e;
+        --shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.7);
+        --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.5);
+        --panel: rgba(16, 16, 16, 0.9);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+      }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--font-display);
+      }
+
+      /* ---------- viewport / canvas ---------- */
+      #viewport {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        cursor: grab;
+        background-color: var(--bg);
+        background-image: radial-gradient(
+          circle,
+          var(--grid) 1.4px,
+          transparent 1.5px
+        );
+        background-repeat: repeat;
+      }
+      #viewport.panning {
+        cursor: grabbing;
+      }
+      #viewport.connecting {
+        cursor: crosshair;
+      }
+      #world {
+        position: absolute;
+        top: 0;
+        left: 0;
+        transform-origin: 0 0;
+        will-change: transform;
+      }
+      #edges {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 1px;
+        height: 1px;
+        overflow: visible;
+        pointer-events: none;
+      }
+      #edges path.hit {
+        pointer-events: stroke;
+      }
+
+      /* ---------- nodes ---------- */
+      .node {
+        position: absolute;
+        border-radius: 16px;
+        background: var(--card);
+        border: 1.5px solid var(--border);
+        box-shadow: var(--shadow-sm);
+        padding: 12px 14px;
+        user-select: none;
+        cursor: grab;
+        transition:
+          opacity 0.38s ease,
+          transform 0.38s ease,
+          box-shadow 0.15s;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        overflow: visible;
+        width: max-content;
+        max-width: 340px; /* hug the copy; wrap only when a line is long */
+      }
+      .node.dragging {
+        cursor: grabbing;
+        box-shadow: var(--shadow);
+        z-index: 5;
+        transition: none;
+      }
+      .node.hidden {
+        opacity: 0;
+        pointer-events: none;
+        transform: scale(0.92);
+      }
+      .node.selected {
+        border-color: var(--accent);
+        box-shadow:
+          0 0 0 3px var(--accent-soft),
+          var(--shadow);
+      }
+      .node .title {
+        font-weight: 700;
+        font-size: 16px;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+        outline: none;
+      }
+      .node .sub {
+        font-size: 12px;
+        color: var(--fg-2);
+        line-height: 1.3;
+      }
+      .node[data-editing="true"] {
+        cursor: text;
+      }
+      .node[data-editing="true"] .title {
+        cursor: text;
+      }
+
+      /* node kinds */
+      .node.flow {
+        border-color: var(--border-strong);
+      }
+      .node.flowstrong {
+        border-color: var(--accent-line);
+        background:
+          linear-gradient(180deg, var(--accent-soft), transparent), var(--card);
+      }
+      .node.stage {
+        background: linear-gradient(180deg, var(--card-2), var(--card));
+        border-color: var(--border-strong);
+      }
+      .node.stage .num {
+        font-family: var(--font-mono);
+        font-weight: 800;
+        font-size: 11px;
+        color: var(--accent-ink);
+        background: linear-gradient(180deg, var(--accent), var(--accent-2));
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 8px;
+        flex: none;
+      }
+      .node.stage .title {
+        display: flex;
+        align-items: center;
+      }
+      .node.stage .tag {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--accent);
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+      .node.skill {
+        padding: 9px 12px;
+        border-radius: 11px;
+        background: var(--card-2);
+      }
+      .node.skill .title {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: 13px;
+      }
+      .node.skill.star {
+        border-color: var(--accent-line);
+        background: linear-gradient(180deg, var(--accent-soft), var(--card-2));
+      }
+      .node.skill.star .title::after {
+        content: " ★";
+        color: var(--accent);
+      }
+      .node.operator {
+        background: linear-gradient(180deg, var(--card-3), var(--card-2));
+        border-color: var(--border-strong);
+        border-style: dashed;
+        align-items: center;
+        text-align: center;
+      }
+      .node.foundation {
+        background: linear-gradient(180deg, var(--card-2), var(--card));
+        border-color: var(--border-strong);
+        align-items: center;
+        text-align: center;
+      }
+      .node.note {
+        background: var(--card);
+        border-style: dashed;
+      }
+      /* skills listed inside a stage card (no lines needed) */
+      .node .skills {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 10px;
+      }
+      .node .skill-line {
+        font-family: var(--font-mono);
+        font-weight: 500;
+        font-size: 12.5px;
+        color: var(--fg-2);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .node .skill-line::before {
+        content: "";
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--fg-3);
+        flex: none;
+      }
+      .node .skill-line.star {
+        color: var(--fg);
+        font-weight: 700;
+      }
+      .node .skill-line.star::before {
+        background: linear-gradient(180deg, var(--accent), var(--accent-2));
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+      .node .skill-line.star::after {
+        content: "★";
+        color: var(--accent);
+        margin-left: auto;
+        font-size: 11px;
+      }
+      /* inline chips inside a band (foundations) */
+      .node .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+        justify-content: center;
+      }
+      .node .chip {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: 12.5px;
+        padding: 7px 12px;
+        border-radius: 9px;
+        background: var(--card);
+        border: 1px solid var(--border-strong);
+        color: var(--fg);
+      }
+      .node.foundation .chip {
+        background: var(--bg);
+      }
+      .node.operator .title {
+        font-size: 15px;
+      }
+
+      /* connect handles */
+      .handle {
+        position: absolute;
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 2px solid var(--bg);
+        opacity: 0;
+        cursor: crosshair;
+        transition: opacity 0.12s;
+        z-index: 6;
+      }
+      .node:hover .handle {
+        opacity: 0.9;
+      }
+      .handle:hover {
+        transform: scale(1.3);
+      }
+      .handle.t {
+        top: -7px;
+        left: 50%;
+        margin-left: -6.5px;
+      }
+      .handle.b {
+        bottom: -7px;
+        left: 50%;
+        margin-left: -6.5px;
+      }
+      .handle.l {
+        left: -7px;
+        top: 50%;
+        margin-top: -6.5px;
+      }
+      .handle.r {
+        right: -7px;
+        top: 50%;
+        margin-top: -6.5px;
+      }
+
+      /* ---------- toolbar ---------- */
+      #bar {
+        position: fixed;
+        top: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        border-radius: 15px;
+        box-shadow: var(--shadow);
+        z-index: 20;
+        max-width: calc(100vw - 24px);
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .grp {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 0 4px;
+      }
+      .grp + .grp {
+        border-left: 1px solid var(--border);
+      }
+      .btn {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 0.02em;
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--fg);
+        padding: 8px 12px;
+        border-radius: 10px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: 0.12s;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .btn:hover {
+        border-color: var(--border-strong);
+      }
+      .btn.primary {
+        background: linear-gradient(180deg, var(--accent), var(--accent-2));
+        color: var(--accent-ink);
+        border-color: var(--accent-2);
+      }
+      .btn.icon {
+        padding: 8px 10px;
+        min-width: 34px;
+        justify-content: center;
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--fg-2);
+      }
+      .eyebrow {
+        font-family: var(--font-mono);
+        font-weight: 800;
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--accent);
+        padding: 0 4px;
+      }
+      #zoomval,
+      #revealval {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: 12px;
+        color: var(--fg-2);
+        min-width: 40px;
+        text-align: center;
+      }
+
+      /* ---------- help ---------- */
+      #help {
+        position: fixed;
+        bottom: 14px;
+        left: 14px;
+        z-index: 20;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        border-radius: 13px;
+        padding: 12px 15px;
+        box-shadow: var(--shadow);
+        max-width: 300px;
+        font-size: 12px;
+        color: var(--fg-2);
+        line-height: 1.7;
+      }
+      #help b {
+        color: var(--fg);
+        font-family: var(--font-mono);
+        font-weight: 700;
+      }
+      #help .hd {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+      #help .hd span {
+        font-family: var(--font-mono);
+        font-weight: 800;
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      #help.collapsed .body {
+        display: none;
+      }
+      kbd {
+        font-family: var(--font-mono);
+        background: var(--card-2);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 1px 5px;
+        font-size: 11px;
+        color: var(--fg);
+      }
+      #toast {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        background: var(--fg);
+        color: var(--bg);
+        padding: 9px 16px;
+        border-radius: 10px;
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: 12px;
+        opacity: 0;
+        transition: 0.25s;
+        z-index: 40;
+        pointer-events: none;
+      }
+      #toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      /* ---------- present mode (teleprompter, synced to canvas) ---------- */
+      #present {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 400px;
+        max-width: 92vw;
+        height: 100vh;
+        background: var(--panel);
+        backdrop-filter: blur(14px);
+        border-left: 1px solid var(--border);
+        box-shadow: var(--shadow);
+        z-index: 30;
+        display: none;
+        flex-direction: column;
+        transform: translateX(100%);
+        transition: transform 0.28s ease;
+      }
+      #present.open {
+        display: flex;
+        transform: translateX(0);
+      }
+      .p-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 22px 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      .p-chapter {
+        font-family: var(--font-mono);
+        font-weight: 800;
+        font-size: 12px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .p-count {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: 12px;
+        color: var(--fg-3);
+      }
+      .p-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px 22px 24px;
+      }
+      .p-body .p-title {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 23px;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        margin: 0 0 4px;
+      }
+      .p-body .p-time {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--fg-3);
+        letter-spacing: 0.05em;
+      }
+      .p-block {
+        margin-top: 18px;
+      }
+      .p-block .lbl {
+        font-family: var(--font-mono);
+        font-weight: 800;
+        font-size: 10px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--fg-3);
+        display: block;
+        margin-bottom: 6px;
+      }
+      .p-do {
+        font-size: 14px;
+        color: var(--fg-2);
+        line-height: 1.5;
+      }
+      .p-say {
+        font-size: 16px;
+        line-height: 1.55;
+        color: var(--fg);
+      }
+      .p-say .mono {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        background: var(--card-2);
+        padding: 1px 6px;
+        border-radius: 5px;
+      }
+      .p-callback {
+        border-left: 3px solid var(--accent);
+        background: var(--accent-soft);
+        padding: 10px 12px;
+        border-radius: 0 10px 10px 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--fg);
+      }
+      .p-note {
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--fg-3);
+        font-style: italic;
+      }
+      .p-foot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px 22px;
+        border-top: 1px solid var(--border);
+      }
+      .p-foot #pNext {
+        flex: 1;
+        justify-content: center;
+      }
+      .p-foot #pPrev {
+        justify-content: center;
+      }
+
+      /* ---------- holding card (recorded screen during story beats) ---------- */
+      #titlecard {
+        position: fixed;
+        inset: 0;
+        z-index: 25;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        background:
+          radial-gradient(
+            120% 90% at 50% 12%,
+            var(--accent-soft),
+            transparent 55%
+          ),
+          var(--bg);
+        padding: 40px;
+      }
+      #titlecard.show {
+        display: flex;
+      }
+      #titlecard .tc-eyebrow {
+        font-family: var(--font-mono);
+        font-weight: 800;
+        font-size: 15px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 22px;
+      }
+      #titlecard .tc-title {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 54px;
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+        max-width: 16ch;
+      }
+      #titlecard .tc-hint {
+        font-family: var(--font-mono);
+        font-size: 14px;
+        color: var(--fg-3);
+        margin-top: 24px;
+        letter-spacing: 0.04em;
+      }
+
+      /* ---------- node extras (img, controls, play, step-lock) ---------- */
+      .node .nimg {
+        margin-top: 10px;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        max-width: 210px;
+      }
+      .node .nimg img {
+        display: block;
+        width: 100%;
+        height: 112px;
+        object-fit: cover;
+      }
+      .node .nctls {
+        display: flex;
+        gap: 6px;
+        margin-top: 10px;
+        flex-wrap: wrap;
+      }
+      .node .nctl {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: 11px;
+        border: 1px solid var(--border-strong);
+        background: var(--card-2);
+        color: var(--fg);
+        padding: 5px 9px;
+        border-radius: 8px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .node .nctl:hover {
+        border-color: var(--accent-line);
+      }
+      .node .nctl.play {
+        color: var(--accent);
+      }
+      .node .nctl:disabled {
+        opacity: 0.42;
+        cursor: default;
+        color: var(--fg-3);
+      }
+      .node .nexpand {
+        position: absolute;
+        top: -9px;
+        right: -9px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: linear-gradient(180deg, var(--accent), var(--accent-2));
+        color: var(--accent-ink);
+        border: 2px solid var(--bg);
+        font-family: var(--font-mono);
+        font-weight: 800;
+        font-size: 13px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 6;
+        padding: 0;
+        line-height: 1;
+      }
+      .node .lockhint {
+        display: none;
+        position: absolute;
+        inset: auto 0 -21px 0;
+        text-align: center;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .node.steplock {
+        opacity: 0.42;
+        cursor: pointer;
+      }
+      .node.steplock:hover {
+        opacity: 0.72;
+      }
+      .node.steplock .lockhint {
+        display: block;
+      }
+
+      /* ---------- node drawer ---------- */
+      #drawer-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 34;
+        display: none;
+      }
+      #drawer-backdrop.open {
+        display: block;
+      }
+      #drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 440px;
+        max-width: 94vw;
+        height: 100vh;
+        background: var(--panel);
+        backdrop-filter: blur(14px);
+        border-left: 1px solid var(--border);
+        box-shadow: var(--shadow);
+        z-index: 35;
+        display: none;
+        flex-direction: column;
+        transform: translateX(100%);
+        transition: transform 0.26s ease;
+      }
+      #drawer.open {
+        display: flex;
+        transform: translateX(0);
+      }
+      .dr-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 20px 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      .dr-title {
+        font-weight: 700;
+        font-size: 18px;
+        letter-spacing: -0.01em;
+      }
+      .dr-tabs {
+        display: flex;
+        gap: 6px;
+        padding: 12px 20px 0;
+        flex-wrap: wrap;
+      }
+      .dr-tab {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--fg-2);
+        padding: 7px 11px;
+        border-radius: 9px;
+        cursor: pointer;
+      }
+      .dr-tab.active {
+        background: var(--accent-soft);
+        border-color: var(--accent-line);
+        color: var(--fg);
+      }
+      .dr-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 18px 20px 26px;
+      }
+      .dr-layer {
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--fg-2);
+        min-height: 108px;
+      }
+      /* the layer body is the node's explainer — render long, multi-paragraph
+         text comfortably (headings, paragraphs, lists all get breathing room). */
+      .dr-layer p {
+        margin: 0 0 12px;
+      }
+      .dr-layer p:last-child {
+        margin-bottom: 0;
+      }
+      .dr-layer h3,
+      .dr-layer h4 {
+        margin: 18px 0 8px;
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--fg);
+      }
+      .dr-layer h3:first-child,
+      .dr-layer h4:first-child {
+        margin-top: 0;
+      }
+      .dr-layer ul,
+      .dr-layer ol {
+        margin: 0 0 12px;
+        padding-left: 20px;
+      }
+      .dr-layer li {
+        margin: 0 0 6px;
+      }
+      .dr-layer strong,
+      .dr-layer b {
+        color: var(--fg);
+        font-weight: 700;
+      }
+      .dr-pager {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 16px;
+      }
+      .dr-pager button {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--fg);
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        cursor: pointer;
+      }
+      .dr-pager button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      .dr-dots {
+        display: flex;
+        gap: 7px;
+      }
+      .dr-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--fg-3);
+      }
+      .dr-dot.on {
+        background: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+      .dr-filter {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+        align-items: center;
+      }
+      .dr-filter .lbl {
+        font-family: var(--font-mono);
+        font-weight: 800;
+        font-size: 9px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--fg-3);
+        margin-right: 2px;
+      }
+      .dr-chip {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: 10px;
+        text-transform: uppercase;
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--fg-2);
+        padding: 5px 9px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .dr-chip.on {
+        background: var(--accent-soft);
+        border-color: var(--accent-line);
+        color: var(--fg);
+      }
+      .dr-prob {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 13px 14px;
+        margin-top: 12px;
+        background: var(--card);
+      }
+      .dr-prob h4 {
+        margin: 0 0 4px;
+        font-size: 14px;
+      }
+      .dr-prob .sym {
+        font-size: 12.5px;
+        color: var(--fg-2);
+        line-height: 1.4;
+      }
+      .dr-prob .fix {
+        font-size: 13px;
+        color: var(--fg);
+        line-height: 1.45;
+        margin-top: 8px;
+      }
+      .dr-prob .pmeta {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--fg-3);
+        margin-top: 8px;
+        letter-spacing: 0.04em;
+      }
+      .dr-copy {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: 11px;
+        border: 1px solid var(--border-strong);
+        background: var(--card-2);
+        color: var(--fg);
+        padding: 7px 11px;
+        border-radius: 8px;
+        cursor: pointer;
+        margin-top: 10px;
+      }
+      .dr-copy:hover {
+        border-color: var(--accent-line);
+      }
+      .dr-img {
+        width: 100%;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+      }
+      .dr-empty {
+        color: var(--fg-3);
+        font-size: 13px;
+      }
+
+      /* ---------- outcomes card ---------- */
+      #outcomes {
+        position: fixed;
+        top: 74px;
+        left: 14px;
+        z-index: 22;
+        width: 320px;
+        max-width: calc(100vw - 28px);
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: var(--shadow);
+        padding: 14px 16px;
+        display: none;
+      }
+      #outcomes.show {
+        display: block;
+      }
+      #outcomes .oc-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+      #outcomes .oc-head span {
+        font-family: var(--font-mono);
+        font-weight: 800;
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      #outcomes .oc-head button {
+        background: none;
+        border: none;
+        color: var(--fg-3);
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 1;
+      }
+      #outcomes ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      #outcomes li {
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--fg);
+        margin-bottom: 5px;
+      }
+
+      /* ---------- first-run banner ---------- */
+      #banner {
+        position: fixed;
+        bottom: 64px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 22;
+        display: none;
+        align-items: center;
+        gap: 12px;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        padding: 10px 14px;
+        max-width: calc(100vw - 28px);
+      }
+      #banner.show {
+        display: flex;
+      }
+      #banner span {
+        font-size: 12.5px;
+        color: var(--fg-2);
+      }
+      #banner button {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: 11px;
+        border: 1px solid var(--accent-2);
+        background: linear-gradient(180deg, var(--accent), var(--accent-2));
+        color: var(--accent-ink);
+        padding: 7px 12px;
+        border-radius: 9px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      /* ---------- shipped viewer chrome (this instance is the delivered notepad:
+         keep + Text, zoom, Fit, Save/Load — hide Lewis's recording tools) ---------- */
+      #btnPresent,
+      #btnFocus,
+      #btnRevealReset,
+      #btnRevealBack,
+      #btnRevealFwd,
+      #revealval,
+      #btnAuto,
+      #btnReset,
+      #btnTheme {
+        display: none !important;
+      }
+
+      /* ---------- chrome levels ---------- */
+      /* editable viewer instance (data-island meta.chrome:"viewer") — trims
+         Lewis's recording-only tools, leaving a simple notepad: + Text, zoom,
+         Fit, Save/Load. The shared template (no flag) keeps the full toolbar. */
+      html.chrome-viewer .grp-record,
+      html.chrome-viewer .tool-record {
+        display: none !important;
+      }
+      /* read-only embed (?mode=view) — the audience only zooms, fits + clicks.
+         Every toolbar group except zoom/Fit is hidden. */
+      html.viewmode #bar .grp:not(#grpZoom) {
+        display: none !important;
+      }
+      html.viewmode #help,
+      html.viewmode #banner {
+        display: none !important;
+      }
+      html.viewmode .handle {
+        display: none !important;
+      }
+      html.viewmode .node {
+        cursor: pointer;
+      }
+      #viewhint {
+        position: fixed;
+        left: 18px;
+        bottom: 18px;
+        z-index: 60;
+        display: none;
+        max-width: 300px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        line-height: 1.55;
+        letter-spacing: 0.03em;
+        color: var(--fg-2);
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        padding: 10px 13px;
+      }
+      html.viewmode #viewhint {
+        display: block;
+      }
+      #viewhint b {
+        color: var(--accent);
+        font-weight: 700;
+      }
+      #nodetip {
+        position: fixed;
+        z-index: 90;
+        display: none;
+        pointer-events: none;
+        max-width: 280px;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border-strong);
+        border-radius: 10px;
+        box-shadow: var(--shadow-sm);
+        padding: 9px 12px;
+        font-family: var(--font-display);
+      }
+      #nodetip strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--fg);
+      }
+      #nodetip span {
+        display: block;
+        margin-top: 3px;
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: var(--fg-2);
+      }
+
+      /* ---------- focus-mode indicator ---------- */
+      #focusind {
+        position: fixed;
+        bottom: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 21;
+        display: none;
+        align-items: center;
+        gap: 10px;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        padding: 8px 12px;
+      }
+      #focusind.show {
+        display: flex;
+      }
+      #focusind .fi-lbl {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        font-size: 12px;
+        color: var(--fg);
+        min-width: 92px;
+        text-align: center;
+      }
+      #focusind button {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--fg);
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        cursor: pointer;
+      }
+      #focusind button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      .btn.active {
+        background: var(--accent-soft);
+        border-color: var(--accent-line);
+        color: var(--fg);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Episode data-island: paste an episode.json-shaped object here to seed
+         the canvas (see episodes/_SCHEMA.md §1). Empty by default → the built-in
+         Video #1 autoPopulate() is used as the fallback/example. -->
+    <script id="episode-data" type="application/json">
+      {
+        "meta": {
+          "slug": "01-complete-ai-investing-system",
+          "videoNumber": 1,
+          "title": "The Complete AI Investing System",
+          "theme": "site",
+          "mode": "launch",
+          "ctaType": "webinar",
+          "ctaUrl": "https://01accelerator.com/a2i",
+          "ctaLabel": "Register for the live training",
+          "videoUrl": null,
+          "week": 1,
+          "give": "Trading Suite",
+          "outcomes": [
+            "Understand every box in a complete AI trading system — the four stages and how they hand off.",
+            "See why a good system beats a good strategy — how to stop being the gambler and become the house.",
+            "Explain the two checks that separate a real edge from a lucky backtest (walk-forward + the overfitting check).",
+            "Grab the whole Trading Suite free in Skool, drop it on your machine, connect the two MCPs, and install your own strategy into it."
+          ],
+          "chrome": "viewer"
+        },
+        "nodes": [
+          {
+            "id": "strat",
+            "kind": "flowstrong",
+            "group": 1,
+            "title": "Your strategy",
+            "sub": "a plug-in · just proposes a trade",
+            "step": null,
+            "layers": [
+              "Your strategy is the one part most people obsess over — the signal, the setup, the entry rule. Here it's deliberately demoted to a plug-in: it proposes, and nothing more.",
+              "What's inside it: whatever edge you bring — a moving-average cross, a breakout rule, a mean-reversion setup, or a Pine script you wrote. You install your own, or clone a template to start. The system doesn't care which, as long as it can emit a clear trade intent.",
+              "How it works end-to-end: your strategy takes in market data (through the Foundations MCPs) and outputs exactly one thing — a trade intent, a proposal like 'buy X'. That's the whole job. It never sizes the position, never places the order, never touches the broker.",
+              "How it connects: the intent flows straight into Stage 1 (Research & validation), which decides whether the edge is even real before anything downstream acts on it. Because the strategy is only a plug-in, you can swap it, retire it, or run a second one alongside — the system around it never changes.",
+              "Why it's demoted: this is Archie Karas at the table. A hot hand is a strategy, and on its own it gives everything back. All the power lives to the right of this box."
+            ],
+            "problems": [],
+            "img": null,
+            "t0": null,
+            "t1": null
+          },
+          {
+            "id": "intent",
+            "kind": "flow",
+            "group": 1,
+            "title": "Trade intent",
+            "sub": "a proposal, not an order",
+            "step": null,
+            "layers": [
+              "The single thing a strategy is allowed to produce: 'I think we should buy X.' A proposal, not an order.",
+              "What's inside an intent: the direction (buy or sell), the instrument, and the reasoning — but crucially not the size and not a live order. It's a request waiting for the system to rule on it.",
+              "How it works: every stage downstream — validation, sizing, the risk gate, execution, monitoring — acts on the intent, never on the strategy directly. This one boundary is what makes strategies swappable and the whole system safe.",
+              "How it connects: the intent is the handoff from your strategy (left) into the system (right). Nothing reaches a broker on the strength of an intent alone — it has to survive Stage 1's validation and Stage 2's risk gate first."
+            ],
+            "problems": [],
+            "img": null,
+            "t0": null,
+            "t1": null
+          },
+          {
+            "id": "found",
+            "kind": "foundation",
+            "group": 6,
+            "title": "Foundations · set up once",
+            "sub": "the tools your AI is allowed to touch — charts, market data, your broker",
+            "chips": [
+              "mcp-builder",
+              "claude-api",
+              "TradingView MCP",
+              "trading-os MCP",
+              "Alpha Vantage MCP"
+            ],
+            "step": 1,
+            "layers": [
+              "The AI's hands. Until you connect these, your model is a brain in a jar — it can talk about markets all day but it can't see a chart or place a single trade.",
+              "The two scary words, demystified. API = a doorway one app opens so another can walk through (your broker has one, TradingView has one). MCP = the universal adapter that plugs your AI into all those doorways at once — set up once, and it can reach every tool.",
+              "What's inside — every tool named: TradingView MCP (drives your live TradingView Desktop — charts, Pine scripts, alerts, live data) · trading-os MCP (reads your accounts and positions, read-only by default so it's safe to connect first) · Alpha Vantage MCP (keyless market + economic data — no API key needed) · mcp-builder (how MCP servers are built, for the curious) · claude-api (Anthropic API literacy, also for the curious).",
+              "How it works end-to-end: you install the Suite skills once (drop the folder into ~/.claude/skills, or run setup.sh), then connect the MCPs with two `claude mcp add` commands. From then on the AI can look at a chart and pull prices in plain English — the moment it stops being a chatbot and becomes an operator.",
+              "How it connects: Foundations sits underneath all four stages — every stage borrows these hands. Stage 1 uses the TradingView MCP to backtest Pine, Stage 2 uses Alpha Vantage for the news calendar, Stage 3 routes orders through the broker doorway, and Stage 4 pulls the numbers for the report.",
+              "Set-up-once gotcha: tear-sheet and alpha-combine need Python ≤ 3.12, so both ship a uv-managed 3.12 venv and just work regardless of your system Python. If you get stuck connecting anything here, the drawer's troubleshooting tab has the fixes — Windows Day-0 first."
+            ],
+            "problems": [
+              {
+                "id": "win-claude-install",
+                "step": "Install Claude Code + drop in the Trading Suite skills (Day 0/1)",
+                "problem": "Windows: `claude` isn't recognised / the skills folder never gets picked up",
+                "symptom": "`claude` returns \"not recognized as an internal or external command\", or you copy the trading-suite skills in but Claude Code lists none of them. This is the single most common wall — a Windows PATH + skills-directory mismatch that stops people on Day 0/1.",
+                "platforms": ["win"],
+                "os": ["windows"],
+                "agents": ["claude", "codex"],
+                "fix": "Windows keeps its per-user config under %USERPROFILE% (usually C:\\Users\\<you>), NOT the Git-Bash/WSL home. Install via the official installer or npm (`npm i -g @anthropic-ai/claude-code`), reopen PowerShell so PATH refreshes, then confirm `claude --version`. Put skills in %USERPROFILE%\\.claude\\skills\\ (each skill its own folder with SKILL.md). If you work inside WSL, do everything inside WSL and use the Linux home instead — don't mix the two. Then restart Claude Code and run `/skills` (Codex: reload the workspace) to confirm they load.",
+                "prompt": "I'm on Windows and Claude Code either isn't on my PATH or isn't detecting the Trading Suite skills I copied in. Check my environment: print `echo %USERPROFILE%`, tell me whether I'm in PowerShell/CMD or Git-Bash/WSL, and find where `.claude/skills` actually resolves for the shell I'm using. Then: (1) confirm Claude Code is installed and on PATH (reinstall via npm -g @anthropic-ai/claude-code if not), (2) make sure the trading-suite skills sit in the .claude/skills folder that matches this shell, one folder per skill each containing SKILL.md, and (3) restart and list the skills so we can see they loaded. Walk me through it one command at a time and wait for my output before the next step."
+              },
+              {
+                "id": "skills-not-detected",
+                "step": "Copy skills into ~/.claude/skills (or run setup.sh)",
+                "problem": "Skills copied but Claude Code doesn't see them",
+                "symptom": "The trading-suite folder is on disk but `/skills` shows nothing new, or a skill name doesn't autocomplete.",
+                "platforms": ["mac", "win", "linux"],
+                "os": ["mac", "windows", "linux"],
+                "agents": ["claude", "codex"],
+                "fix": "Each skill must live in its OWN directory directly under .claude/skills/ with a SKILL.md at its root (not nested one level too deep, e.g. skills/trading-suite/skills/foo — flatten it). Re-run the included setup.sh, or copy the folder's skills/* one level up. Restart Claude Code so it re-scans. On macOS/Linux confirm the path is ~/.claude/skills; on Windows it's %USERPROFILE%\\.claude\\skills.",
+                "prompt": "I downloaded the trading-suite folder and copied it in, but Claude Code isn't detecting the skills. List the contents of my ~/.claude/skills directory (Windows: %USERPROFILE%\\.claude\\skills), check that each skill is its own folder with a SKILL.md at the root (not double-nested), fix the folder layout if it's nested wrong, re-run setup.sh if present, then restart and show me the skills loading."
+              },
+              {
+                "id": "mcp-tradingview-notfound",
+                "step": "Connect the TradingView MCP (the AI's hands)",
+                "problem": "`claude mcp add tradingview` fails or the MCP shows offline",
+                "symptom": "The launch command errors, or the MCP is added but greyed out / \"failed to start\", so the AI can't read your chart.",
+                "platforms": ["mac", "win", "linux"],
+                "os": ["mac", "windows", "linux"],
+                "agents": ["claude", "codex"],
+                "fix": "The launch command in setup.sh is a placeholder until the real TradingView MCP command is filled in (flagged open). Use the exact command from the Skool post / setup.sh. Make sure TradingView Desktop is actually running first — the MCP drives a live desktop chart, so it must be open and logged in. Then `claude mcp list` should show it connected. If it still fails, remove and re-add: `claude mcp remove tradingview` then re-run the add command.",
+                "prompt": "My TradingView MCP won't connect in Claude Code. Run `claude mcp list` and show me the status. Confirm TradingView Desktop is open and logged in (the MCP needs it running). If the server is failing, remove it with `claude mcp remove tradingview` and re-add it using the exact launch command from my setup.sh, then verify it shows connected. If the launch command in setup.sh still looks like a placeholder, tell me — I need the real one from the Skool post."
+              },
+              {
+                "id": "mcp-tradingos-path",
+                "step": "Connect the trading-os MCP (read-only by default)",
+                "problem": "trading-os MCP path is wrong / node can't find tos.mjs",
+                "symptom": "`claude mcp add trading-os` adds it but it won't start: \"Cannot find module ~/trading-os/os/bin/tos.mjs\".",
+                "platforms": ["mac", "win", "linux"],
+                "os": ["mac", "windows", "linux"],
+                "agents": ["claude", "codex"],
+                "fix": "The path in the add command must point at where you actually put trading-os. Check the folder exists and find the real path to tos.mjs, then re-run the add command with that absolute path. On Windows use the full path with the right slashes and make sure Node.js is installed (`node --version`). trading-os is read-only by default, so this MCP is safe to connect before anything else.",
+                "prompt": "The trading-os MCP won't start — node says it can't find tos.mjs. Find where trading-os actually lives on my machine (search for tos.mjs), confirm Node.js is installed, then re-add the MCP with `claude mcp add trading-os -- node <the real absolute path to tos.mjs> mcp` and verify it connects with `claude mcp list`."
+              },
+              {
+                "id": "py-version-venv",
+                "step": "Python ≤ 3.12 for tear-sheet / alpha-combine",
+                "problem": "Python 3.13+ breaks tear-sheet (QuantStats) and alpha-combine",
+                "symptom": "Import errors, wheel-build failures, or QuantStats/pandas crashes when a skill runs — usually because your system Python is 3.13+.",
+                "platforms": ["mac", "win", "linux"],
+                "os": ["mac", "windows", "linux"],
+                "agents": ["claude", "codex"],
+                "fix": "tear-sheet and alpha-combine need Python ≤ 3.12. Both ship a uv-managed 3.12 venv so they should run regardless of your system Python — make sure `uv` is installed (`pip install uv` or the official installer) and let the skill create its venv on first run. If it grabbed your system 3.13 instead, delete the skill's .venv and re-run so uv rebuilds it against 3.12. The rest of the Suite is stdlib/numpy and runs on any Python.",
+                "prompt": "A Trading Suite skill (tear-sheet or alpha-combine) is failing with Python import/build errors. Check my Python version (`python3 --version`), confirm `uv` is installed (install it if not), then make the skill use its bundled Python 3.12 uv venv: if there's a stale .venv in the skill folder that points at Python 3.13+, delete it and re-run the skill so uv rebuilds against 3.12. Show me it running clean."
+              },
+              {
+                "id": "canvas-download-fail",
+                "step": "Install the System Canvas (download step)",
+                "problem": "The canvas file won't download from the paste block",
+                "symptom": "curl errors, a 000/404, an empty system-canvas.html, or the agent says it can't reach the URL — usually no internet, a corporate proxy, or curl not installed.",
+                "platforms": ["mac", "win", "linux"],
+                "os": ["mac", "windows", "linux"],
+                "agents": ["claude", "codex"],
+                "fix": "Confirm you're online and can reach the URL in a browser. On Windows use curl.exe (not the PowerShell curl alias). Behind a proxy, set HTTPS_PROXY or just open the URL in your browser and Save As system-canvas.html into your current folder. If curl is missing, use your browser to download it — the file is all you need, there's no install.",
+                "prompt": "The System Canvas download in the paste block failed. Check whether I'm online and can reach https://01accelerator.com/v-assets/01/system-canvas.html, tell me if it's a proxy or a missing curl, and give me a working way to save that URL as system-canvas.html in my current folder (curl.exe on Windows, or just downloading it in my browser). Then confirm the file is there and non-empty."
+              },
+              {
+                "id": "canvas-open-fail",
+                "step": "Install the System Canvas (open step)",
+                "problem": "The canvas downloaded but won't open / opens blank",
+                "symptom": "`open`/`start`/`xdg-open` does nothing, opens the wrong app, or the page loads blank.",
+                "platforms": ["mac", "win", "linux"],
+                "os": ["mac", "windows", "linux"],
+                "agents": ["claude", "codex"],
+                "fix": "Open it by hand: double-click system-canvas.html, or in your browser File → Open File and pick it. On Linux, xdg-open needs a default browser set. If it opens but is blank, you likely saved the page's HTML wrapper instead of the file — re-download with the curl command (it saves the raw file), and make sure the filename ends in .html. The canvas needs no server; a local file open is enough.",
+                "prompt": "My system-canvas.html downloaded but won't open or opens blank. Verify the file exists and is real HTML (not an error page), then open it in my default browser the manual way for my OS (double-click, or File → Open File). If it's blank, re-download it with the curl command so I get the raw file, and confirm it renders the diagram."
+              }
+            ],
+            "img": null,
+            "t0": null,
+            "t1": null
+          },
+          {
+            "id": "s1",
+            "kind": "stage",
+            "group": 2,
+            "num": "1",
+            "title": "Research & validation",
+            "tag": "is the edge even real?",
+            "skills": [
+              { "t": "strategy-audit" },
+              { "t": "pbo-deflated-sharpe", "star": true },
+              { "t": "backtesting-frameworks" },
+              { "t": "backtest" },
+              { "t": "alpha-combine" },
+              { "t": "regime" },
+              { "t": "pine-developer" },
+              { "t": "pine-debugger" },
+              { "t": "pine-backtester" }
+            ],
+            "step": 2,
+            "layers": [
+              "The stage that proves an edge is real before a penny is risked. You walk out of it never trusting a pretty backtest again.",
+              "What's inside — every skill named: backtest (a quick one-symbol test on history) · backtesting-frameworks (the pitfalls to avoid — look-ahead, survivorship, costs) · strategy-audit (a six-test stress audit: walk-forward, Monte Carlo, sensitivity, slippage, drawdown) · pbo-deflated-sharpe (the overfitting catcher — PBO% plus a Deflated/Probabilistic Sharpe, ending in a pass/fail verdict) · regime (detects whether the market is trending, ranging or volatile, because a strategy rarely works in all three) · alpha-combine (blends many weak signals into one, IR = IC·√N).",
+              "The Pine trio, named: pine-developer (writes a TradingView strategy in Pine) · pine-debugger (reads the Pine console and fixes compile errors) · pine-backtester (runs it in the TradingView strategy tester). All three drive your live TradingView Desktop through the TradingView MCP.",
+              "How it works end-to-end: the trade intent comes in, you backtest it, then you stress it. Two checks almost nobody runs decide its fate — walk-forward (prove it on data it has never seen, rolling forward) and the overfitting check (try 500 variants and one looks amazing by pure luck). pbo-deflated-sharpe prints the verdict on screen.",
+              "The rule of the stage, and the handoff: no edge survives walk-forward + the overfitting check → no money, and it never reaches Stage 2. If it passes, a validated intent moves on to the Risk engine. The house proved its edge before it opened."
+            ],
+            "problems": [
+              {
+                "id": "pbo-no-output",
+                "step": "Run pbo-deflated-sharpe (the overfitting check)",
+                "problem": "pbo-deflated-sharpe runs but prints no PBO% / verdict",
+                "symptom": "The skill finishes but you don't see the PBO%, Deflated Sharpe, or pass/fail line — usually because it wasn't given enough trials/returns to judge.",
+                "platforms": ["mac", "win", "linux"],
+                "os": ["mac", "windows", "linux"],
+                "agents": ["claude", "codex"],
+                "fix": "PBO and the Deflated Sharpe need the FULL set of backtest trials you tried (not just the winner) plus a returns series. Feed it the matrix of all your strategy variations' returns; with only one series it can't estimate how likely the best one is luck. Point the skill at your backtest output folder, or re-run your strategy-audit so it hands the trial set straight to pbo-deflated-sharpe.",
+                "prompt": "pbo-deflated-sharpe ran but didn't print a PBO% or a pass/fail verdict. Explain what inputs it needs (the full set of trial returns, not just the best run), check what I actually passed it, and re-run it against the complete trial matrix from my backtests so it can print PBO%, Deflated Sharpe, and the pass/fail verdict. Show me the output and tell me plainly whether my edge survived."
+              },
+              {
+                "id": "py-version-venv",
+                "step": "Python ≤ 3.12 for tear-sheet / alpha-combine",
+                "problem": "Python 3.13+ breaks tear-sheet (QuantStats) and alpha-combine",
+                "symptom": "Import errors, wheel-build failures, or QuantStats/pandas crashes when a skill runs — usually because your system Python is 3.13+.",
+                "platforms": ["mac", "win", "linux"],
+                "os": ["mac", "windows", "linux"],
+                "agents": ["claude", "codex"],
+                "fix": "tear-sheet and alpha-combine need Python ≤ 3.12. Both ship a uv-managed 3.12 venv so they should run regardless of your system Python — make sure `uv` is installed (`pip install uv` or the official installer) and let the skill create its venv on first run. If it grabbed your system 3.13 instead, delete the skill's .venv and re-run so uv rebuilds it against 3.12. The rest of the Suite is stdlib/numpy and runs on any Python.",
+                "prompt": "A Trading Suite skill (tear-sheet or alpha-combine) is failing with Python import/build errors. Check my Python version (`python3 --version`), confirm `uv` is installed (install it if not), then make the skill use its bundled Python 3.12 uv venv: if there's a stale .venv in the skill folder that points at Python 3.13+, delete it and re-run the skill so uv rebuilds against 3.12. Show me it running clean."
+              },
+              {
+                "id": "pine-mcp-permission",
+                "step": "Write/check TradingView strategies (pine trio)",
+                "problem": "pine-developer / pine-backtester can't drive TradingView",
+                "symptom": "pine-developer writes a script but pine-backtester can't compile or read results — the Pine editor isn't responding to the MCP.",
+                "platforms": ["mac", "win", "linux"],
+                "os": ["mac", "windows", "linux"],
+                "agents": ["claude", "codex"],
+                "fix": "The pine trio drives the live TradingView Desktop via the TradingView MCP, so that MCP must be connected AND TradingView Desktop open with the Pine editor accessible. Confirm the MCP is up (`claude mcp list`), open the Pine editor tab in TradingView, then re-run. If compile still fails, ask pine-debugger to read the Pine console errors and fix the script.",
+                "prompt": "My pine-developer/pine-backtester skills can't compile or read strategy results in TradingView. Confirm the TradingView MCP is connected (`claude mcp list`), make sure TradingView Desktop is open with the Pine editor tab active, then re-run the compile. If it still errors, use pine-debugger to pull the Pine console errors and walk me through fixing the script."
+              }
+            ],
+            "img": null,
+            "t0": null,
+            "t1": null
+          },
+          {
+            "id": "s2",
+            "kind": "stage",
+            "group": 3,
+            "num": "2",
+            "title": "Risk engine",
+            "tag": "the authority",
+            "skills": [
+              { "t": "risk-manager", "star": true },
+              { "t": "capital-allocator" },
+              { "t": "news-guard" }
+            ],
+            "step": 3,
+            "layers": [
+              "The heart of the system. The one inversion that turns the gambler into the house: risk isn't a suggestion, it's the authority.",
+              "What's inside — every skill named: risk-manager (the pre-trade gate and circuit breaker — it approves, reduces, or blocks) · capital-allocator (the sizing authority — full Kelly / half-Kelly / quarter-Kelly, plus exposure and drift) · news-guard (an event blackout — don't trade into NFP, FOMC or CPI, using the keyless Alpha Vantage calendar).",
+              "The dials it enforces: risk-per-trade · position size · total exposure · correlation (why 'five trades' can secretly be one bet) · max drawdown / circuit-breaker · news windows. You set these once — until you do, the gate has nothing to enforce and quietly waves everything through.",
+              "How it works end-to-end: a validated intent arrives from Stage 1; the risk engine sizes it and rules on it — approve as-is, reduce the size, or block it outright. Your strategy asks; the engine decides. The strategy never touches the broker directly.",
+              "How it connects: only an approved, correctly-sized order passes to Stage 3 (Execution). 'Remember you put too much on? This is the box that never lets you. Archie had no box.'"
+            ],
+            "problems": [
+              {
+                "id": "newsguard-apikey",
+                "step": "Set up news-guard (event blackout)",
+                "problem": "news-guard doesn't know about upcoming NFP/FOMC/CPI",
+                "symptom": "news-guard runs but never blocks around events, or errors fetching the economic calendar.",
+                "platforms": ["mac", "win", "linux"],
+                "os": ["mac", "windows", "linux"],
+                "agents": ["claude", "codex"],
+                "fix": "news-guard needs an events source. It can use the keyless Alpha Vantage MCP for economic data, or a calendar you point it at. Confirm the Alpha Vantage MCP is connected (it's keyless — no API key needed), then tell news-guard which events to blackout (NFP, FOMC, CPI) and the window (e.g. 30 min either side). If it errored on a fetch, it's usually just the data source not connected.",
+                "prompt": "news-guard isn't blocking trades around high-impact events. Check whether the Alpha Vantage MCP (keyless) is connected as its data source, connect it if not, then configure news-guard to blackout NFP, FOMC and CPI with a sensible window either side and show me it correctly flagging the next scheduled event."
+              },
+              {
+                "id": "risk-config-missing",
+                "step": "Configure the risk engine (risk-manager + capital-allocator)",
+                "problem": "risk-manager approves everything / no limits set",
+                "symptom": "The risk gate waves trades through without reducing or blocking — it has no limits to enforce yet.",
+                "platforms": ["mac", "win", "linux"],
+                "os": ["mac", "windows", "linux"],
+                "agents": ["claude", "codex"],
+                "fix": "risk-manager and capital-allocator need your limits before they can be the authority: risk-per-trade (e.g. 1%), max exposure, max correlation, max drawdown / circuit-breaker level, and a sizing rule (Kelly / half / quarter). Set these once. Until they're set, the gate has nothing to enforce. Ask capital-allocator to propose sensible defaults for your account size, then confirm them.",
+                "prompt": "My risk-manager is approving every trade because I haven't set limits. Walk me through configuring the risk engine: pick a risk-per-trade %, max exposure, max correlation, a drawdown circuit-breaker, and a sizing rule (Kelly/half/quarter). Have capital-allocator suggest defaults for my account size, then set them so risk-manager actually approves/reduces/blocks. Show me it blocking a trade that breaks a limit."
+              }
+            ],
+            "img": null,
+            "t0": null,
+            "t1": null
+          },
+          {
+            "id": "s3",
+            "kind": "stage",
+            "group": 4,
+            "num": "3",
+            "title": "Execution",
+            "tag": "same way, every time",
+            "skills": [
+              { "t": "execution-safety", "star": true },
+              { "t": "pine trio" },
+              { "t": "TradingView MCP" }
+            ],
+            "step": 4,
+            "layers": [
+              "Do it the same way, every time. The system removes the human moment of weakness — and connecting a real broker is made deliberately hard, on purpose.",
+              "What's inside — named: execution-safety (the broker safety gate — paper-first, live OFF by default, and a typed human confirmation) · the pine trio + TradingView MCP (turn the approved signal into an order on the chart side) · broker libraries (ccxt / ib_async / alpaca-py) added only when you wire a real account, later.",
+              "The discipline defaults: paper-first · live OFF by default · preview → confirm. Those three kill the late entry, the moved stop and the revenge re-entry — the human mistakes, removed by design.",
+              "How it works end-to-end: an approved order arrives from the Risk engine. execution-safety intercepts it, re-checks the hard risk limits, shows you a preview, and stops — nothing reaches a real broker until you literally type CONFIRM SELL 50 SPY @ market. Every order is intercepted, risk-checked, and logged.",
+              "How it connects: the gap is the thesis. Live is hard to switch on on purpose, and turning it on is a deliberate multi-step opt-in. Once an order fills, the result flows to Stage 4 for monitoring. The house never lets a dealer freelance."
+            ],
+            "problems": [
+              {
+                "id": "exec-live-off",
+                "step": "Execution — keep live OFF until you mean it",
+                "problem": "Not sure whether execution is about to send real orders",
+                "symptom": "You want to test but you're scared it'll place a real trade, or you can't tell if you're in paper or live mode.",
+                "platforms": ["mac", "win", "linux"],
+                "os": ["mac", "windows", "linux"],
+                "agents": ["claude", "codex"],
+                "fix": "By design, execution-safety ships with live OFF and paper-first — no order reaches a real broker without (1) passing hard risk limits and (2) you typing an explicit confirmation like `CONFIRM SELL 50 SPY @ market`. So testing is safe by default. Verify you're in paper mode before anything, and know that turning live on is deliberately a multi-step, opt-in action. If in doubt, don't wire a broker yet — everything in this video works on paper.",
+                "prompt": "I want to test execution but I'm afraid of placing a real trade. Confirm execution-safety is in paper-first mode with live OFF (it should be by default), show me exactly where that switch is, and explain the typed-confirmation gate so I understand nothing goes to a real broker without me explicitly confirming. Keep me in paper mode for now."
+              },
+              {
+                "id": "broker-lib-missing",
+                "step": "Wire a real broker (optional, later)",
+                "problem": "Broker library (ccxt / ib_async / alpaca-py) not installed",
+                "symptom": "When you try to connect a real account you get ModuleNotFoundError for ccxt / ib_async / alpaca-py.",
+                "platforms": ["mac", "win", "linux"],
+                "os": ["mac", "windows", "linux"],
+                "agents": ["claude", "codex"],
+                "fix": "Broker libs are only needed once you wire a real account — they're not required for the paper-first workflow in this video. Install the one for your broker (e.g. `pip install ccxt` for most crypto, `alpaca-py` for Alpaca, `ib_async` for Interactive Brokers) into the same environment the Suite uses. But do this last, after your edge has passed validation and your risk limits are set.",
+                "prompt": "I'm ready to wire a real broker and I'm getting ModuleNotFoundError. Tell me which broker library I need for my broker (ccxt / alpaca-py / ib_async), install it into the same Python environment the Trading Suite uses, and confirm the import works — but first double-check my strategy has passed validation and my risk limits are set, since live should be the last step."
+              }
+            ],
+            "img": null,
+            "t0": null,
+            "t1": null
+          },
+          {
+            "id": "s4",
+            "kind": "stage",
+            "group": 5,
+            "num": "4",
+            "title": "Monitor & review",
+            "tag": "the learning loop",
+            "skills": [
+              { "t": "tear-sheet" },
+              { "t": "trade-journal" },
+              { "t": "trading-loop", "star": true },
+              { "t": "autoresearch" }
+            ],
+            "step": 5,
+            "layers": [
+              "The casino watches every table. The system doesn't just run — it learns, getting better month over month instead of repeating the same mistakes.",
+              "What's inside — every skill named: tear-sheet (the performance report — CAGR, Sharpe, max drawdown, win rate, in real numbers via QuantStats) · trade-journal (logs every trade, and its loss-autopsy turns a losing trade into one specific rule change) · trading-loop (the monthly self-learning cadence) · autoresearch (a plan → act → measure → keep-winners loop that hunts your next edge in the background).",
+              "The self-learning loop: hypothesis → paper-trade a month → measure → loss-autopsy → adjust ONE variable → keep it if it improved, else revert → repeat. The hard rule on screen: change one variable at a time, or you never know what actually worked.",
+              "How it works end-to-end: filled trades and their results come in from Execution; this layer measures them, autopsies the losers, and emits concrete changes. Those changes feed back to your strategy (the dashed loop on the map) so next month starts smarter than this one.",
+              "How it connects: this is the arrow that closes the circle — Stage 4 loops back to your strategy. 'The part Archie never had: a system that learns from its mistakes instead of repeating them until it's broke.'"
+            ],
+            "problems": [
+              {
+                "id": "tearsheet-python",
+                "step": "Generate a tear-sheet (performance report)",
+                "problem": "tear-sheet (QuantStats) won't render the report",
+                "symptom": "tear-sheet errors on generate, or produces an empty/blank HTML/PNG report.",
+                "platforms": ["mac", "win", "linux"],
+                "os": ["mac", "windows", "linux"],
+                "agents": ["claude", "codex"],
+                "fix": "tear-sheet uses QuantStats, which needs Python ≤ 3.12 (see the Python venv fix) and a returns series to chart. Make sure it's running in its bundled uv 3.12 venv, then feed it your trade/returns data. A blank report almost always means it got no returns — point it at your trade-journal or backtest output.",
+                "prompt": "tear-sheet won't produce a report (errors or comes out blank). Confirm it's running in its Python 3.12 uv venv (rebuild if it grabbed 3.13+), then give it a real returns series from my trade-journal or backtest output and regenerate the QuantStats report. Show me the rendered tear-sheet."
+              },
+              {
+                "id": "journal-db-path",
+                "step": "Set up trade-journal (loss-autopsy → rule change)",
+                "problem": "trade-journal can't find or create its log",
+                "symptom": "trade-journal errors writing an entry, or every session starts empty because it's writing to a different path.",
+                "platforms": ["mac", "win", "linux"],
+                "os": ["mac", "windows", "linux"],
+                "agents": ["claude", "codex"],
+                "fix": "trade-journal keeps a local log file/db. Make sure it has a writable path and that you're pointing at the same one each session (an absolute path avoids the \"it's empty again\" problem when you run from different folders). Confirm the folder exists and is writable, then log a test trade and read it back.",
+                "prompt": "My trade-journal either errors on write or looks empty every time. Find where it's storing its log, set it to a fixed absolute path in a writable folder, confirm the folder exists, then log a test trade and read it back so I know it's persisting. Show me the loss-autopsy output on a losing example."
+              }
+            ],
+            "img": null,
+            "t0": null,
+            "t1": null
+          },
+          {
+            "id": "op",
+            "kind": "operator",
+            "group": 7,
+            "title": "AI — the operator",
+            "sub": "runs the whole loop in the background · metered spend cap · always routed through the risk engine, never around it",
+            "step": 6,
+            "layers": [
+              "The dealer that never sleeps. The AI runs the whole loop in the background so you're not babysitting screens.",
+              "What it actually does: it operates the tools through the Foundations MCPs — pulling data, running the validation skills, asking the risk engine, staging execution, generating the reports — on a schedule, without you at the keyboard.",
+              "The two guardrails: it's metered (a spend cap so it can't run away), and it's always routed through the risk engine, never around it. It can't place an order the gate hasn't approved, and it can't flip live trading on by itself.",
+              "How it connects: the operator sits across the top of all four stages and the Foundations band — it's the thing running the left-to-right flow and the learning loop back to your strategy. You designed the casino; the AI is the dealer — it never sleeps, never tilts, and never breaks your rules."
+            ],
+            "problems": [],
+            "img": null,
+            "t0": null,
+            "t1": null
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "from": "strat",
+            "to": "intent",
+            "label": "emits",
+            "dashed": false,
+            "spine": true,
+            "route": null,
+            "group": 1
+          },
+          {
+            "id": "e2",
+            "from": "intent",
+            "to": "s1",
+            "label": "",
+            "dashed": false,
+            "spine": true,
+            "route": null,
+            "group": 2
+          },
+          {
+            "id": "e3",
+            "from": "s1",
+            "to": "s2",
+            "label": "",
+            "dashed": false,
+            "spine": true,
+            "route": null,
+            "group": 3
+          },
+          {
+            "id": "e4",
+            "from": "s2",
+            "to": "s3",
+            "label": "",
+            "dashed": false,
+            "spine": true,
+            "route": null,
+            "group": 4
+          },
+          {
+            "id": "e5",
+            "from": "s3",
+            "to": "s4",
+            "label": "",
+            "dashed": false,
+            "spine": true,
+            "route": null,
+            "group": 5
+          },
+          {
+            "id": "e6",
+            "from": "s4",
+            "to": "strat",
+            "label": "learn & repeat",
+            "dashed": true,
+            "spine": false,
+            "route": "loop",
+            "group": 8
+          }
+        ],
+        "beats": [
+          {
+            "chapter": "Open · declaration",
+            "title": "The definitive-course promise",
+            "time": "0:00 · to camera · ~20s",
+            "reveal": 0,
+            "do": "Straight to camera, before any story. Set the frame: complete, we do it together, and it's free.",
+            "say": "“This is the definitive course on what a complete AI trading system actually looks like — and we're going to walk through <b>all of it together</b>, start to finish. At the end I give you the <b>entire system, free</b>. So if you've ever felt like you're one good strategy away from making this work — stay with me. Because that was never the thing stopping you.”"
+          },
+          {
+            "chapter": "Open · cold open",
+            "title": "Archie Karas — the run",
+            "time": "~0:20 · story · ~80s",
+            "reveal": 0,
+            "do": "Slow, giver's tempo. One vivid true story — real names, years, numbers. This is the emotional spine.",
+            "say": "Dec 1992 · $50 in his pocket → borrows $10k → sits down against Ungar, Brunson, Reese and <b>beats them all</b> → turns it into ~$40m over 3 years. What did the house do? <b>Nothing.</b> It smiled, kept the tables open, and waited. 1995 — in ~3 weeks he lost the entire $40m.<br><br>Land it: “He was the <b>strategy</b>. The house was the <b>system</b>. And the system always wins. So I'm not giving you a strategy — I'm giving you the system that turns you from the gambler into the house. And I'm giving you the whole thing, free.”",
+            "note": "Optional proof button: “His name was Archie Karas. Look him up.”"
+          },
+          {
+            "chapter": "Open · credibility",
+            "title": "Your story — £1k → £180k",
+            "time": "~1:50 · to camera · ~45s",
+            "reveal": 0,
+            "do": "Connection, not a bare stat. The lunch-breaks-in-the-car grind; mornings and evenings.",
+            "say": "Normal job → researched markets in every gap I had → started with <b>£1k</b> → three years later that portfolio was <b>£180k</b>. Framed as personal history: “you decide if that's good — that's just how it went for me.” Now AI does the heavy lifting, so I rebuilt the whole thing to run itself — and I'm giving it away, because I'd rather you have it than keep it behind a paywall to look clever.",
+            "note": "Claim guardrail: personal history only. No “you'll get this too.” Must stay real + defensible (see launch.md)."
+          },
+          {
+            "chapter": "Map · orientation",
+            "title": "The whole picture, one screen",
+            "time": "~2:40 · diagram · ~3-4m",
+            "reveal": 5,
+            "focus": null,
+            "do": "Reveal the spine. Walk it fast, left → right. Don't go deep yet — just show every box exists.",
+            "say": "The one line the whole lesson hangs on: <b>System = the environment · Strategy = a plug-in · Risk = the authority · AI = the operator.</b><br><br>A strategy just emits a <b>trade intent</b> → the system validates it → sizes it → approves or blocks it → executes it → monitors it. “You're not watching a strategy. You're watching a <b>system that gives any decent strategy a real chance.</b>”<br><br>Promise: “By the end you'll understand every box — and the actual build is in my free Skool. Nothing held back.”"
+          },
+          {
+            "chapter": "Lesson · foundations",
+            "title": "Give the brain hands (MCP + API) ★",
+            "time": "~6m · deep — the superpower moment",
+            "reveal": 6,
+            "focus": "found",
+            "do": "Focus the foundations band. Demystify the two scary words, then show it live.",
+            "say": "An AI in a chat box is a <b>brain in a jar</b> — it can't see your charts or place a trade. <b>API</b> = a doorway one app opens so another can walk through. <b>MCP</b> = the universal adapter that plugs your AI into all those doorways at once, set up once.<br><br><b>Show it live:</b> connect to TradingView, ask in plain English what the market's doing, watch it go look. That's the moment it becomes an <b>operator</b>, not a chatbot.",
+            "note": "★ Go deep here — this is the jaw-drop that makes everything after feel possible."
+          },
+          {
+            "chapter": "Lesson · stage 1",
+            "title": "Research & validation — is the edge real? ★",
+            "time": "~deep",
+            "reveal": 6,
+            "focus": "s1",
+            "do": "Zoom to Stage 1. Fast tour of the names, then go deep on 'why most backtests lie'.",
+            "say": "Fast: strategy-audit · backtest · frameworks (look-ahead, survivorship, costs) · regime · alpha-combine · the pine trio.<br><br><b>★ Deep:</b> a curve that fits the <i>past</i> is a different thing from one that works in the <i>future</i>. Two checks almost nobody runs — <b>walk-forward</b> (prove it on data it's never seen) and the <b>overfitting check</b> (try 500, one looks amazing by luck). Run <span class=\"mono\">pbo-deflated-sharpe</span> → PBO% / Deflated Sharpe / pass-fail on screen.",
+            "callback": "↺ No edge survives both checks → no money. <b>The house proved its edge before it opened.</b>"
+          },
+          {
+            "chapter": "Lesson · stage 2",
+            "title": "Risk engine — what kills accounts ★",
+            "time": "~deep · the heart",
+            "reveal": 6,
+            "focus": "s2",
+            "do": "Zoom to Stage 2. This is the emotional core — the one inversion.",
+            "say": "Named fast: risk-per-trade · sizing (Kelly / half / quarter) · exposure · <b>correlation</b> (five trades can secretly be one bet) · drawdown · news blackout.<br><br><b>★ The inversion:</b> your strategy <i>asks</i>; the risk engine <i>decides</i> — approve, reduce, or block. The strategy never touches the broker. Skills: risk-manager (gate + circuit breaker) · capital-allocator (the sizing authority) · news-guard (no NFP/FOMC).",
+            "callback": "↺ “Remember 'you put too much on'? This is the box that never lets you. Archie had no box.”"
+          },
+          {
+            "chapter": "Lesson · stage 3",
+            "title": "Execution — same way, every time ★",
+            "time": "~deep",
+            "reveal": 6,
+            "focus": "s3",
+            "do": "Zoom to Stage 3. The discipline defaults, then the broker safety gate.",
+            "say": "Defaults: <b>paper-first · live OFF by default · preview → confirm.</b> Kills the late entry, the moved stop, the revenge re-entry.<br><br><b>★ The gap is the thesis:</b> no order reaches a real broker without (1) passing hard risk limits and (2) a typed human confirm — you literally type <span class=\"mono\">CONFIRM SELL 50 SPY @ market</span>. Live is hard to switch on <i>on purpose</i>.",
+            "callback": "↺ The house never lets a dealer freelance."
+          },
+          {
+            "chapter": "Lesson · stage 4",
+            "title": "Monitor & review — the learning loop ★",
+            "time": "~deep",
+            "reveal": 6,
+            "focus": "s4",
+            "do": "Zoom to Stage 4. The watching layer, then the self-learning loop.",
+            "say": "Watching layer: tear-sheet (real-number report) · trade-journal (your own behaviour is a risk to track — its loss-autopsy emits a <i>specific</i> rule change) · alerts.<br><br><b>★ The loop:</b> hypothesis → paper-trade a month → measure → loss-autopsy → change <b>ONE variable</b> → keep if it improved, else revert → repeat. Hard rule on screen: one variable at a time.",
+            "callback": "↺ “The part Archie never had — a system that learns from its mistakes instead of repeating them until it's broke.”"
+          },
+          {
+            "chapter": "Lesson · the operator",
+            "title": "The AI runs it in the background",
+            "time": "~short · tie the bow",
+            "reveal": 7,
+            "focus": "op",
+            "do": "Reveal the operator band across the top. Zoom to it. Short and confident.",
+            "say": "AI = the operator. <b>Metered</b> — a spend cap so it can't run away. And <b>always routed through the risk engine, never around it.</b><br><br>“You designed the casino. The AI is the dealer — it never sleeps, never tilts, and never breaks your rules.”"
+          },
+          {
+            "chapter": "The give",
+            "title": "Straight to the free Skool",
+            "time": "~2m · selfless landing",
+            "reveal": 8,
+            "focus": null,
+            "do": "Zoom out to the whole system + close the loop. This is what they get. Single focus, no other ask.",
+            "say": "“That's the whole system. Here's the part people don't believe: I've put all of it — the <b>Trading Suite</b> — in my free Skool. Not a teaser. The whole thing. Free.”<br><br>How, dead simple: join free → <b>download the Trading Suite folder</b> → drop it on your machine → connect the two MCPs → install your own strategy. One folder.",
+            "note": "Wk1 = near-zero ask. The free Skool is the ONLY ask. Fill in https://www.skool.com/zero-one/about before publish + confirm the Suite is actually loaded there."
+          },
+          {
+            "chapter": "The bridge",
+            "title": "Soft seed — Aug 5, then outro",
+            "time": "~30s · no pitch",
+            "reveal": 8,
+            "focus": null,
+            "do": "One quiet line. Do not oversell — Wk1 stays soft.",
+            "say": "“One last thing. Everything you just saw — small parts each doing one job, run by AI in the background — that's not just how I trade. It's how I run my whole business. I'm doing something live on <b>August 5th</b> about exactly that. Link's in the description. But honestly? <b>Go get the Suite first.</b>”",
+            "note": "Seeds the Agents-to-Income webinar via the free-Skool nurture. Ask escalates in later videos."
+          }
+        ]
+      }
+    </script>
+    <div id="viewport">
+      <div id="world">
+        <svg id="edges"></svg>
+      </div>
+    </div>
+
+    <div id="bar">
+      <div class="grp"><span class="eyebrow">System&nbsp;Canvas</span></div>
+      <div class="grp">
+        <button class="btn primary tool-record" id="btnAuto">
+          ⚡ Auto-populate
+        </button>
+        <button class="btn ghost tool-edit" id="btnAdd">+ Text</button>
+      </div>
+      <div class="grp grp-record">
+        <button
+          class="btn ghost icon"
+          id="btnRevealReset"
+          title="Start reveal from the beginning"
+        >
+          ⟲
+        </button>
+        <button class="btn icon" id="btnRevealBack" title="Hide last group">
+          ◀
+        </button>
+        <span id="revealval">all</span>
+        <button class="btn icon" id="btnRevealFwd" title="Reveal next group">
+          ▶
+        </button>
+      </div>
+      <div class="grp grp-record">
+        <button
+          class="btn primary"
+          id="btnPresent"
+          title="Recording script, synced to the canvas"
+        >
+          ▶ Present
+        </button>
+      </div>
+      <div class="grp grp-record">
+        <button
+          class="btn ghost"
+          id="btnFocus"
+          title="Focus = walk it one step at a time · Whole = the full map"
+        >
+          Focus ⟷ Whole
+        </button>
+      </div>
+      <div class="grp" id="grpZoom">
+        <button class="btn icon" id="btnZoomOut">−</button>
+        <span id="zoomval">100%</span>
+        <button class="btn icon" id="btnZoomIn">+</button>
+        <button class="btn ghost" id="btnFit">Fit</button>
+      </div>
+      <div class="grp">
+        <button
+          class="btn ghost icon tool-record"
+          id="btnTheme"
+          title="Toggle dark / light terminal"
+        >
+          ◐
+        </button>
+        <button class="btn ghost tool-edit" id="btnExport">Save</button>
+        <button class="btn ghost tool-edit" id="btnImport">Load</button>
+        <button class="btn ghost tool-record" id="btnReset">Clear</button>
+      </div>
+    </div>
+
+    <div id="help">
+      <div class="hd">
+        <span>How to drive it</span
+        ><button
+          class="btn ghost icon"
+          id="helpToggle"
+          style="padding: 2px 8px"
+        >
+          –
+        </button>
+      </div>
+      <div class="body">
+        <b>Auto-populate</b> lays out the whole system.<br />
+        <b>Reveal ▶</b> shows it stage-by-stage (for filming).<br />
+        Drag empty space to <b>pan</b> · scroll to <b>zoom</b>.<br />
+        <b>Double-click</b> empty space = new text box.<br />
+        Drag a box's <b>dot</b> onto another to connect.<br />
+        Double-click a box to <b>rename</b>. <kbd>Del</kbd> removes selected.
+      </div>
+    </div>
+    <div id="toast"></div>
+
+    <!-- clean, AUDIENCE-SAFE holding card for the recorded screen during the
+         story beats. Static brand only — never internal notes / timings. -->
+    <div id="titlecard">
+      <div class="tc-eyebrow">Free course</div>
+      <div class="tc-title">The complete AI investing system</div>
+      <div class="tc-hint">Build it with Claude</div>
+    </div>
+
+    <!-- outcomes card ("by the end you'll be able to…") — shown if META.outcomes -->
+    <div id="outcomes">
+      <div class="oc-head">
+        <span>By the end you'll be able to…</span>
+        <button id="ocClose" title="Dismiss">✕</button>
+      </div>
+      <ul class="oc-list"></ul>
+    </div>
+
+    <!-- first-run banner: shown once, then a localStorage flag hides it -->
+    <div id="banner">
+      <span
+        >This is your editable map — edits save on your machine. Export/import
+        to move it.</span
+      >
+      <button id="bannerClose">Got it</button>
+    </div>
+
+    <!-- view-only hint (shown only when ?mode=view) -->
+    <div id="viewhint">
+      <b>View-only.</b> Hover a box to peek · click one to open its layers.
+      Install your own editable copy from the episode page.
+    </div>
+    <!-- hover tooltip for view-only mode -->
+    <div id="nodetip"></div>
+
+    <!-- focus-mode step indicator -->
+    <div id="focusind">
+      <button id="fiPrev" title="Previous step">◀</button>
+      <span class="fi-lbl" id="fiLbl">Step 1 / 1</span>
+      <button id="fiNext" title="Next step">▶</button>
+    </div>
+
+    <!-- node drawer (layers / problems / image), opened by a node's ＋ control -->
+    <div id="drawer-backdrop"></div>
+    <div id="drawer">
+      <div class="dr-head">
+        <span class="dr-title" id="drTitle"></span>
+        <button class="btn ghost icon" id="drClose" title="Close (Esc)">
+          ✕
+        </button>
+      </div>
+      <div class="dr-tabs" id="drTabs"></div>
+      <div class="dr-body" id="drBody"></div>
+    </div>
+
+    <script>
+      "use strict";
+      // ============================================================
+      //  State
+      // ============================================================
+      const VP = document.getElementById("viewport");
+      const WORLD = document.getElementById("world");
+      const SVG = document.getElementById("edges");
+      const LS_KEY = "system-canvas-01-complete-ai-investing-system";
+      // Read-only embed mode: ?mode=view disables all editing (drag, rename,
+      // add, delete, connect, import/clear), skips localStorage persistence,
+      // and turns hover into an explore affordance. Default = full editor.
+      const VIEW = new URLSearchParams(location.search).get("mode") === "view";
+      if (VIEW) document.documentElement.classList.add("viewmode");
+
+      let cam = { x: 120, y: 220, s: 0.72 }; // world transform (translate + scale)
+      let nodes = []; // {id,x,y,w,h,kind,title,sub,num,tag,star,group}
+      let edges = []; // {id,from,to,label,dashed,group}
+      let revealLevel = Infinity; // groups shown (Infinity = all)
+      let maxGroup = 0;
+      let selected = null; // {type:'node'|'edge', id}
+      let uid = 1;
+      const HDR = 30; // spine connects through each box's header row
+      let LANE_Y = 500; // y of the "learn & repeat" return lane (set on layout)
+      let presenting = false; // present (teleprompter) mode active
+      let presentIdx = 0; // current beat
+      let panelInset = 0; // right-side space taken by the present panel
+      const nid = () => "n" + uid++;
+      const eid = () => "e" + uid++;
+      const elMap = new Map(); // node id -> element
+
+      // --- episode meta (seeded from the data-island; empty for autoPopulate) ---
+      let META = {}; // {theme,ctaType,ctaUrl,ctaLabel,videoUrl,week,give,outcomes[]}
+      // --- focus mode (walk the map one step at a time) ---
+      let focusMode = false; // Focus ⟷ Whole toggle
+      let focusStep = 1; // 1-based index into the ordered step nodes
+      // --- node drawer state ---
+      let drawerNode = null; // node currently open in the drawer (null = closed)
+      let drawerTab = null; // "layers" | "problems" | "image"
+      let layerIdx = 0; // current page in the Layers tab
+      let probPlat = "mac"; // problems filter: platform
+      let probAgent = "claude"; // problems filter: agent
+
+      // ============================================================
+      //  Camera / transform
+      // ============================================================
+      function applyCam() {
+        WORLD.style.transform = `translate(${cam.x}px,${cam.y}px) scale(${cam.s})`;
+        const g = 24 * cam.s;
+        VP.style.backgroundSize = `${g}px ${g}px`;
+        VP.style.backgroundPosition = `${cam.x}px ${cam.y}px`;
+        document.getElementById("zoomval").textContent =
+          Math.round(cam.s * 100) + "%";
+      }
+      const toWorld = (sx, sy) => ({
+        x: (sx - cam.x) / cam.s,
+        y: (sy - cam.y) / cam.s,
+      });
+
+      function zoomAt(sx, sy, factor) {
+        const w = toWorld(sx, sy);
+        cam.s = Math.min(2.5, Math.max(0.15, cam.s * factor));
+        cam.x = sx - w.x * cam.s;
+        cam.y = sy - w.y * cam.s;
+        applyCam();
+      }
+
+      function bounds(list) {
+        if (!list.length) return null;
+        let a = Infinity,
+          b = Infinity,
+          c = -Infinity,
+          d = -Infinity;
+        for (const n of list) {
+          a = Math.min(a, n.x);
+          b = Math.min(b, n.y);
+          c = Math.max(c, n.x + n.w);
+          d = Math.max(d, n.y + n.h);
+        }
+        return { x: a, y: b, w: c - a, h: d - b };
+      }
+      function fitTo(list, pad = 90, animate = true, maxS = 2.2) {
+        const bb = bounds(list);
+        if (!bb) return;
+        // available area sits left of the present panel (panelInset)
+        const vw = VP.clientWidth - panelInset,
+          vh = VP.clientHeight;
+        const s = Math.min(
+          maxS,
+          Math.max(
+            0.15,
+            Math.min((vw - pad * 2) / bb.w, (vh - pad * 2) / bb.h),
+          ),
+        );
+        const target = {
+          s,
+          x: (vw - bb.w * s) / 2 - bb.x * s,
+          y: (vh - bb.h * s) / 2 - bb.y * s,
+        };
+        animate ? tweenCam(target) : ((cam = target), applyCam());
+      }
+      // fit to visible nodes; if none visible, leave the camera put
+      function fitVisible(pad = 90) {
+        const vis = nodes.filter(visible);
+        if (vis.length) fitTo(vis, pad);
+      }
+      function focusNode(idOrIds, pad = 150) {
+        const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
+        const list = ids.map(nodeById).filter(Boolean);
+        if (list.length) fitTo(list, pad, true, 1.25);
+      }
+      let tween = null;
+      function tweenCam(t, ms = 480) {
+        const from = { ...cam },
+          t0 = performance.now();
+        if (tween) cancelAnimationFrame(tween);
+        const ease = (x) => 1 - Math.pow(1 - x, 3);
+        (function step(now) {
+          const k = Math.min(1, (now - t0) / ms),
+            e = ease(k);
+          cam.x = from.x + (t.x - from.x) * e;
+          cam.y = from.y + (t.y - from.y) * e;
+          cam.s = from.s + (t.s - from.s) * e;
+          applyCam();
+          if (k < 1) tween = requestAnimationFrame(step);
+        })(t0);
+      }
+
+      // ============================================================
+      //  Rendering
+      // ============================================================
+      const visible = (n) => n.group <= revealLevel;
+      function nodeById(id) {
+        return nodes.find((n) => n.id === id);
+      }
+      // ordered list of nodes that carry a numeric `step` (focus-mode order)
+      function stepNodes() {
+        return nodes
+          .filter((n) => typeof n.step === "number")
+          .sort((a, b) => a.step - b.step);
+      }
+      // 1-based rank of a step node within stepNodes() (null if not a step)
+      function nodeRank(n) {
+        if (typeof n.step !== "number") return null;
+        return stepNodes().findIndex((x) => x.id === n.id) + 1;
+      }
+      // is a node currently on-screen? whole mode = reveal groups; focus = steps.
+      function shown(n) {
+        if (!focusMode) return visible(n);
+        if (typeof n.step !== "number") return true; // context nodes stay put
+        return nodeRank(n) <= focusStep + 1; // shown up to next-up (greyed)
+      }
+
+      function render() {
+        const seen = new Set();
+        for (const n of nodes) {
+          seen.add(n.id);
+          let el = elMap.get(n.id);
+          if (!el) {
+            el = makeNodeEl(n);
+            elMap.set(n.id, el);
+            WORLD.appendChild(el);
+          }
+          el.style.left = n.x + "px";
+          el.style.top = n.y + "px";
+          el.style.width = n.fixedW ? n.fixedW + "px" : "";
+          el.style.maxWidth = n.fixedW ? "none" : "";
+          el.classList.toggle("hidden", !shown(n));
+          // focus mode: the next-up step is greyed + "click to unlock"
+          el.classList.toggle(
+            "steplock",
+            focusMode &&
+              typeof n.step === "number" &&
+              nodeRank(n) === focusStep + 1,
+          );
+          el.classList.toggle(
+            "selected",
+            selected && selected.type === "node" && selected.id === n.id,
+          );
+          // refresh label text if not editing
+          if (el.dataset.editing !== "true") {
+            const t = el.querySelector(".title");
+            if (t && t.dataset.raw !== n.title) {
+              setTitle(el, n);
+              t.dataset.raw = n.title;
+            }
+          }
+        }
+        for (const [id, el] of elMap)
+          if (!seen.has(id)) {
+            el.remove();
+            elMap.delete(id);
+          }
+        // boxes hug their copy — measure the real rendered size back so
+        // edge anchors and Fit stay accurate.
+        for (const n of nodes) {
+          const el = elMap.get(n.id);
+          if (el) {
+            n.w = el.offsetWidth;
+            n.h = el.offsetHeight;
+          }
+        }
+        drawEdges();
+        document.getElementById("revealval").textContent =
+          revealLevel === Infinity ? "all" : `${revealLevel}/${maxGroup}`;
+      }
+
+      function setTitle(el, n) {
+        const t = el.querySelector(".title");
+        if (n.kind === "stage") {
+          t.innerHTML = `<span class="num">${n.num || ""}</span><span class="ttext" contenteditable="false">${escapeHtml(n.title)}</span>`;
+        } else {
+          t.textContent = n.title;
+        }
+      }
+      function escapeHtml(s) {
+        const d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+      }
+
+      function makeNodeEl(n) {
+        const el = document.createElement("div");
+        el.className = "node " + n.kind;
+        if (n.star) el.classList.add("star");
+        el.dataset.id = n.id;
+        const title = document.createElement("div");
+        title.className = "title";
+        el.appendChild(title);
+        setTitle(el, n);
+        title.dataset.raw = n.title;
+        if (n.tag) {
+          const tg = document.createElement("div");
+          tg.className = "tag";
+          tg.textContent = n.tag;
+          el.appendChild(tg);
+        }
+        if (n.sub) {
+          const s = document.createElement("div");
+          s.className = "sub";
+          s.textContent = n.sub;
+          el.appendChild(s);
+        }
+        if (n.skills) {
+          const box = document.createElement("div");
+          box.className = "skills";
+          n.skills.forEach((sk) => {
+            const line = document.createElement("div");
+            line.className = "skill-line" + (sk.star ? " star" : "");
+            line.textContent = sk.t;
+            box.appendChild(line);
+          });
+          el.appendChild(box);
+        }
+        if (n.chips) {
+          const box = document.createElement("div");
+          box.className = "chips";
+          n.chips.forEach((c) => {
+            const chip = document.createElement("span");
+            chip.className = "chip";
+            chip.textContent = c;
+            box.appendChild(chip);
+          });
+          el.appendChild(box);
+        }
+        // optional image slot (relative path, cover, small)
+        if (n.img) {
+          const wrap = document.createElement("div");
+          wrap.className = "nimg";
+          const im = document.createElement("img");
+          im.src = n.img;
+          im.alt = n.title || "";
+          im.loading = "lazy";
+          wrap.appendChild(im);
+          el.appendChild(wrap);
+        }
+        // optional controls row: ▶ play segment + drawer-open fallback
+        const hasDrawer = !!(
+          (n.layers && n.layers.length) ||
+          (n.problems && n.problems.length) ||
+          n.img
+        );
+        const hasSegment = Object.prototype.hasOwnProperty.call(n, "t0");
+        if (hasSegment || hasDrawer) {
+          const ctls = document.createElement("div");
+          ctls.className = "nctls";
+          if (hasSegment) {
+            const play = document.createElement("button");
+            play.className = "nctl play nctl-ctl";
+            play.textContent = "▶ play segment";
+            const wired = !!(META.videoUrl && n.t0 != null);
+            if (wired) {
+              play.title = "Open the video at this segment";
+              play.addEventListener("click", (ev) => {
+                ev.stopPropagation();
+                openSegment(n);
+              });
+            } else {
+              play.disabled = true;
+              play.title = "segment wires after the edit";
+            }
+            ctls.appendChild(play);
+          }
+          if (hasDrawer) {
+            const more = document.createElement("button");
+            more.className = "nctl nctl-ctl";
+            more.textContent = "＋ details";
+            more.title = "Open layers / fixes / image";
+            more.addEventListener("click", (ev) => {
+              ev.stopPropagation();
+              openDrawer(n);
+            });
+            ctls.appendChild(more);
+          }
+          el.appendChild(ctls);
+        }
+        // corner ＋ affordance for the drawer (also reachable via the row above)
+        if (hasDrawer) {
+          const exp = document.createElement("button");
+          exp.className = "nexpand nctl-ctl";
+          exp.textContent = "＋";
+          exp.title = "Open details";
+          exp.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            openDrawer(n);
+          });
+          el.appendChild(exp);
+        }
+        for (const side of ["t", "b", "l", "r"]) {
+          const h = document.createElement("div");
+          h.className = "handle " + side;
+          h.dataset.side = side;
+          el.appendChild(h);
+        }
+        // focus-mode "click to unlock" hint (only visible when .steplock)
+        const lh = document.createElement("div");
+        lh.className = "lockhint";
+        lh.textContent = "click to unlock";
+        el.appendChild(lh);
+        wireNode(el, n);
+        return el;
+      }
+
+      // ---- edge geometry ----
+      function anchor(n, tx, ty) {
+        const cx = n.x + n.w / 2,
+          cy = n.y + n.h / 2;
+        const dx = tx - cx,
+          dy = ty - cy;
+        if (dx === 0 && dy === 0) return { x: cx, y: cy };
+        const hw = n.w / 2,
+          hh = n.h / 2;
+        const sx = dx === 0 ? Infinity : hw / Math.abs(dx);
+        const sy = dy === 0 ? Infinity : hh / Math.abs(dy);
+        const t = Math.min(sx, sy);
+        return { x: cx + dx * t, y: cy + dy * t };
+      }
+      function edgePath(a, b) {
+        const dx = b.x - a.x,
+          dy = b.y - a.y;
+        const horiz = Math.abs(dx) > Math.abs(dy);
+        const k = Math.min(
+          120,
+          Math.max(40, (horiz ? Math.abs(dx) : Math.abs(dy)) * 0.45),
+        );
+        const c1 = horiz
+          ? { x: a.x + Math.sign(dx) * k, y: a.y }
+          : { x: a.x, y: a.y + Math.sign(dy) * k };
+        const c2 = horiz
+          ? { x: b.x - Math.sign(dx) * k, y: b.y }
+          : { x: b.x, y: b.y - Math.sign(dy) * k };
+        return `M ${a.x} ${a.y} C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${b.x} ${b.y}`;
+      }
+
+      function drawEdges() {
+        let defs = `<defs>
+    <marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="var(--edge-strong)"/></marker>
+    <marker id="arwm" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 Z" fill="var(--edge)"/></marker>
+  </defs>`;
+        let out = defs;
+        for (const e of edges) {
+          const A = nodeById(e.from),
+            B = nodeById(e.to);
+          if (!A || !B) continue;
+          const edgeVisible =
+            shown(A) && shown(B) && (focusMode || e.group <= revealLevel);
+          if (!edgeVisible) continue;
+          let a, b, d;
+          if (e.route === "loop") {
+            // orthogonal return path: down from A, along the lane, up into B
+            a = { x: A.x + A.w / 2, y: A.y + A.h };
+            b = { x: B.x + B.w / 2, y: B.y + B.h };
+            const r = 16;
+            const y = LANE_Y;
+            const dir = b.x < a.x ? -1 : 1;
+            d =
+              `M ${a.x} ${a.y} L ${a.x} ${y - r} Q ${a.x} ${y} ${a.x - dir * r} ${y} ` +
+              `L ${b.x + dir * r} ${y} Q ${b.x} ${y} ${b.x} ${y - r} L ${b.x} ${b.y}`;
+          } else if (e.spine) {
+            // clean horizontal flow through the header row of each box
+            const lr = B.x >= A.x;
+            a = { x: lr ? A.x + A.w : A.x, y: A.y + HDR };
+            b = { x: lr ? B.x : B.x + B.w, y: B.y + HDR };
+            d = edgePath(a, b);
+          } else {
+            const ca = { x: A.x + A.w / 2, y: A.y + A.h / 2 },
+              cb = { x: B.x + B.w / 2, y: B.y + B.h / 2 };
+            a = anchor(A, cb.x, cb.y);
+            b = anchor(B, ca.x, ca.y);
+            d = edgePath(a, b);
+          }
+          const sel =
+            selected && selected.type === "edge" && selected.id === e.id;
+          const col = e.dashed ? "var(--edge)" : "var(--edge-strong)";
+          const mk = e.dashed ? "arwm" : "arw";
+          out += `<path class="hit" data-eid="${e.id}" d="${d}" fill="none" stroke="transparent" stroke-width="16"/>`;
+          out += `<path d="${d}" fill="none" stroke="${sel ? "var(--accent)" : col}" stroke-width="${sel ? 3 : 2}" ${e.dashed ? 'stroke-dasharray="7 6"' : ""} marker-end="url(#${mk})"/>`;
+          if (e.label) {
+            const mx = (a.x + b.x) / 2,
+              my = e.route === "loop" ? LANE_Y : (a.y + b.y) / 2;
+            out += `<rect x="${mx - e.label.length * 3.6 - 6}" y="${my - 10}" width="${e.label.length * 7.2 + 12}" height="19" rx="6" fill="var(--bg)" opacity="0.9"/>`;
+            out += `<text x="${mx}" y="${my + 4}" text-anchor="middle" font-family="var(--font-mono)" font-size="12" font-weight="700" fill="var(--fg-2)">${escapeHtml(e.label)}</text>`;
+          }
+        }
+        SVG.innerHTML = out;
+        SVG.querySelectorAll("path.hit").forEach((p) => {
+          p.addEventListener("mousedown", (ev) => {
+            ev.stopPropagation();
+            selected = { type: "edge", id: p.dataset.eid };
+            render();
+          });
+          p.addEventListener("dblclick", (ev) => {
+            if (VIEW) return;
+            ev.stopPropagation();
+            const e = edges.find((x) => x.id === p.dataset.eid);
+            const lbl = prompt("Line label (blank to clear):", e.label || "");
+            if (lbl !== null) {
+              e.label = lbl.trim();
+              save();
+              render();
+            }
+          });
+        });
+      }
+
+      // ============================================================
+      //  View-only hover tooltip (title + sub / first layer line)
+      // ============================================================
+      const NODETIP = document.getElementById("nodetip");
+      function nodeTipHTML(n) {
+        let sec = n.sub || n.tag || "";
+        if (!sec && n.layers && n.layers.length) {
+          const d = document.createElement("div");
+          d.innerHTML = n.layers[0];
+          sec = (d.textContent || "").trim();
+        }
+        if (sec.length > 140) sec = sec.slice(0, 138) + "…";
+        return (
+          "<strong>" +
+          escapeHtml(n.title) +
+          "</strong>" +
+          (sec ? "<span>" + escapeHtml(sec) + "</span>" : "")
+        );
+      }
+      function showNodeTip(n, e) {
+        if (!NODETIP) return;
+        NODETIP.innerHTML = nodeTipHTML(n);
+        NODETIP.style.display = "block";
+        moveNodeTip(e);
+      }
+      function moveNodeTip(e) {
+        if (!NODETIP || NODETIP.style.display !== "block") return;
+        const pad = 16;
+        let x = e.clientX + pad,
+          y = e.clientY + pad;
+        const r = NODETIP.getBoundingClientRect();
+        if (x + r.width > window.innerWidth - 8) x = e.clientX - r.width - pad;
+        if (y + r.height > window.innerHeight - 8)
+          y = e.clientY - r.height - pad;
+        NODETIP.style.left = Math.max(8, x) + "px";
+        NODETIP.style.top = Math.max(8, y) + "px";
+      }
+      function hideNodeTip() {
+        if (NODETIP) NODETIP.style.display = "none";
+      }
+
+      // ============================================================
+      //  Node interactions: drag, edit, connect
+      // ============================================================
+      function wireNode(el, n) {
+        if (VIEW) {
+          // read-only: hover reveals a tooltip, click opens the full drawer.
+          el.addEventListener("mouseenter", (e) => showNodeTip(n, e));
+          el.addEventListener("mousemove", (e) => moveNodeTip(e));
+          el.addEventListener("mouseleave", hideNodeTip);
+          el.addEventListener("click", (e) => {
+            if (e.target.closest(".nctl-ctl")) return;
+            if (
+              focusMode &&
+              typeof n.step === "number" &&
+              nodeRank(n) === focusStep + 1
+            ) {
+              gotoStep(focusStep + 1);
+              return;
+            }
+            const hasDrawer = !!(
+              (n.layers && n.layers.length) ||
+              (n.problems && n.problems.length) ||
+              n.img
+            );
+            if (hasDrawer && typeof openDrawer === "function") openDrawer(n);
+          });
+          return;
+        }
+        let mode = null,
+          sx,
+          sy,
+          ox,
+          oy,
+          moved;
+        el.addEventListener("mousedown", (e) => {
+          if (el.dataset.editing === "true") return;
+          // node controls (play / details / ＋) handle their own clicks
+          if (e.target.closest(".nctl-ctl")) return;
+          if (e.target.classList.contains("handle")) {
+            startConnect(n, e);
+            e.stopPropagation();
+            return;
+          }
+          // focus mode: clicking the greyed next-up step unlocks it
+          if (
+            focusMode &&
+            typeof n.step === "number" &&
+            nodeRank(n) === focusStep + 1
+          ) {
+            e.stopPropagation();
+            gotoStep(focusStep + 1);
+            return;
+          }
+          e.stopPropagation();
+          selected = { type: "node", id: n.id };
+          render();
+          mode = "drag";
+          moved = false;
+          sx = e.clientX;
+          sy = e.clientY;
+          ox = n.x;
+          oy = n.y;
+          el.classList.add("dragging");
+          const mv = (ev) => {
+            const dx = (ev.clientX - sx) / cam.s,
+              dy = (ev.clientY - sy) / cam.s;
+            if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) > 3)
+              moved = true;
+            n.x = Math.round(ox + dx);
+            n.y = Math.round(oy + dy);
+            el.style.left = n.x + "px";
+            el.style.top = n.y + "px";
+            drawEdges();
+          };
+          const up = () => {
+            document.removeEventListener("mousemove", mv);
+            document.removeEventListener("mouseup", up);
+            el.classList.remove("dragging");
+            if (moved) save();
+          };
+          document.addEventListener("mousemove", mv);
+          document.addEventListener("mouseup", up);
+        });
+        el.addEventListener("dblclick", (e) => {
+          e.stopPropagation();
+          beginEdit(el, n);
+        });
+      }
+
+      function beginEdit(el, n) {
+        el.dataset.editing = "true";
+        const t = el.querySelector(".title");
+        const target = n.kind === "stage" ? t.querySelector(".ttext") : t;
+        target.setAttribute("contenteditable", "true");
+        target.focus();
+        const r = document.createRange();
+        r.selectNodeContents(target);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+        const finish = () => {
+          target.setAttribute("contenteditable", "false");
+          el.dataset.editing = "false";
+          n.title = target.textContent.trim() || "(untitled)";
+          t.dataset.raw = n.title;
+          save();
+          render();
+          target.removeEventListener("blur", finish);
+          target.removeEventListener("keydown", key);
+        };
+        const key = (ev) => {
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            target.blur();
+          }
+          if (ev.key === "Escape") {
+            target.textContent = n.title;
+            target.blur();
+          }
+        };
+        target.addEventListener("blur", finish);
+        target.addEventListener("keydown", key);
+      }
+
+      // drag-to-connect
+      let connectFrom = null,
+        tempPath = null;
+      function startConnect(n, e) {
+        connectFrom = n;
+        VP.classList.add("connecting");
+        const mv = (ev) => {
+          const w = toWorld(ev.clientX, ev.clientY);
+          const ca = { x: n.x + n.w / 2, y: n.y + n.h / 2 };
+          const a = anchor(n, w.x, w.y);
+          if (!tempPath) {
+            tempPath = document.createElementNS(
+              "http://www.w3.org/2000/svg",
+              "path",
+            );
+            tempPath.setAttribute("fill", "none");
+            tempPath.setAttribute("stroke", "var(--accent)");
+            tempPath.setAttribute("stroke-width", "2.5");
+            tempPath.setAttribute("stroke-dasharray", "5 5");
+            SVG.appendChild(tempPath);
+          }
+          tempPath.setAttribute("d", edgePath(a, w));
+        };
+        const up = (ev) => {
+          document.removeEventListener("mousemove", mv);
+          document.removeEventListener("mouseup", up);
+          VP.classList.remove("connecting");
+          if (tempPath) {
+            tempPath.remove();
+            tempPath = null;
+          }
+          const tgt = document.elementFromPoint(ev.clientX, ev.clientY);
+          const nodeEl = tgt && tgt.closest(".node");
+          if (nodeEl && nodeEl.dataset.id !== n.id) {
+            edges.push({
+              id: eid(),
+              from: n.id,
+              to: nodeEl.dataset.id,
+              label: "",
+              dashed: false,
+              group: 0,
+            });
+            save();
+            render();
+          }
+          connectFrom = null;
+        };
+        document.addEventListener("mousemove", mv);
+        document.addEventListener("mouseup", up);
+      }
+
+      // ============================================================
+      //  Viewport: pan, zoom, add, deselect
+      // ============================================================
+      VP.addEventListener("mousedown", (e) => {
+        if (e.target !== VP && e.target !== WORLD && e.target.tagName !== "svg")
+          return;
+        selected = null;
+        render();
+        VP.classList.add("panning");
+        const sx = e.clientX,
+          sy = e.clientY,
+          ox = cam.x,
+          oy = cam.y;
+        const mv = (ev) => {
+          cam.x = ox + (ev.clientX - sx);
+          cam.y = oy + (ev.clientY - sy);
+          applyCam();
+        };
+        const up = () => {
+          VP.classList.remove("panning");
+          document.removeEventListener("mousemove", mv);
+          document.removeEventListener("mouseup", up);
+        };
+        document.addEventListener("mousemove", mv);
+        document.addEventListener("mouseup", up);
+      });
+      VP.addEventListener(
+        "wheel",
+        (e) => {
+          e.preventDefault();
+          if (e.ctrlKey || e.metaKey) {
+            zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.08 : 0.925);
+          } else {
+            cam.x -= e.deltaX;
+            cam.y -= e.deltaY;
+            applyCam();
+          }
+        },
+        { passive: false },
+      );
+      VP.addEventListener("dblclick", (e) => {
+        if (VIEW) return;
+        if (e.target !== VP && e.target !== WORLD && e.target.tagName !== "svg")
+          return;
+        const w = toWorld(e.clientX, e.clientY);
+        addNote(w.x - 90, w.y - 30);
+      });
+
+      function addNote(x, y) {
+        const n = {
+          id: nid(),
+          x: Math.round(x),
+          y: Math.round(y),
+          w: 180,
+          h: 60,
+          kind: "note",
+          title: "New text",
+          group: 0,
+        };
+        nodes.push(n);
+        selected = { type: "node", id: n.id };
+        save();
+        render();
+        requestAnimationFrame(() => {
+          const el = elMap.get(n.id);
+          if (el) beginEdit(el, n);
+        });
+      }
+
+      document.addEventListener("keydown", (e) => {
+        if (document.querySelector('[data-editing="true"]')) return;
+        if (VIEW) return;
+        if (presenting) {
+          if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
+            e.preventDefault();
+            goToBeat(presentIdx + 1);
+            return;
+          }
+          if (e.key === "ArrowLeft" || e.key === "PageUp") {
+            e.preventDefault();
+            goToBeat(presentIdx - 1);
+            return;
+          }
+          if (e.key === "Escape") {
+            exitPresent();
+            return;
+          }
+        }
+        if ((e.key === "Delete" || e.key === "Backspace") && selected) {
+          if (selected.type === "node") {
+            nodes = nodes.filter((n) => n.id !== selected.id);
+            edges = edges.filter(
+              (ed) => ed.from !== selected.id && ed.to !== selected.id,
+            );
+          } else {
+            edges = edges.filter((ed) => ed.id !== selected.id);
+          }
+          selected = null;
+          save();
+          render();
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+          e.preventDefault();
+          exportJSON();
+        }
+      });
+
+      // ============================================================
+      //  Persistence
+      // ============================================================
+      function save() {
+        if (VIEW) return; // read-only embed: never persist viewer state
+        localStorage.setItem(
+          LS_KEY,
+          JSON.stringify({ nodes, edges, cam, uid }),
+        );
+      }
+      function load() {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) return false;
+        try {
+          const d = JSON.parse(raw);
+          nodes = d.nodes || [];
+          edges = d.edges || [];
+          cam = d.cam || cam;
+          uid = d.uid || 1;
+          maxGroup = nodes.reduce((m, n) => Math.max(m, n.group || 0), 0);
+          return nodes.length > 0;
+        } catch {
+          return false;
+        }
+      }
+      function exportJSON() {
+        const blob = new Blob([JSON.stringify({ nodes, edges }, null, 2)], {
+          type: "application/json",
+        });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "system-canvas.json";
+        a.click();
+        toast("saved to file");
+      }
+      function importJSON() {
+        const inp = document.createElement("input");
+        inp.type = "file";
+        inp.accept = "application/json";
+        inp.onchange = () => {
+          const f = inp.files[0];
+          if (!f) return;
+          const r = new FileReader();
+          r.onload = () => {
+            try {
+              const d = JSON.parse(r.result);
+              nodes = d.nodes;
+              edges = d.edges;
+              maxGroup = nodes.reduce((m, n) => Math.max(m, n.group || 0), 0);
+              revealLevel = Infinity;
+              save();
+              render();
+              fitTo(nodes.filter(visible));
+              toast("loaded");
+            } catch {
+              toast("bad file");
+            }
+          };
+          r.readAsText(f);
+        };
+        inp.click();
+      }
+
+      // ============================================================
+      //  AUTO-POPULATE — the Trading System bird's-eye view
+      //  (mirrors launch-scripts/01_complete-ai-investing-system.md)
+      // ============================================================
+      function autoPopulate() {
+        uid = 1;
+        nodes = [];
+        edges = [];
+        elMap.forEach((el) => el.remove());
+        elMap.clear();
+        const N = (o) => {
+          nodes.push(o);
+          return o.id;
+        };
+        const E = (from, to, o = {}) =>
+          edges.push({
+            id: eid(),
+            from,
+            to,
+            label: o.label || "",
+            dashed: !!o.dashed,
+            spine: !!o.spine,
+            route: o.route || null,
+            group: o.group ?? 0,
+          });
+
+        // ---- grid geometry (even, symmetrical) ----
+        const SW = 250,
+          GAP = 74,
+          TOP = 0;
+        const bandW = 4 * SW + 3 * GAP; // operator/foundation span the 4 stages
+        const SX0 = 440; // left edge of stage 1 (room for strategy + intent)
+
+        const stageDefs = [
+          {
+            id: "s1",
+            num: "1",
+            title: "Research & validation",
+            tag: "is the edge even real?",
+            skills: [
+              { t: "strategy-audit" },
+              { t: "pbo-deflated-sharpe", star: true },
+              { t: "backtesting-frameworks" },
+              { t: "backtest" },
+              { t: "alpha-combine" },
+              { t: "regime" },
+              { t: "pine-developer" },
+              { t: "pine-debugger" },
+              { t: "pine-backtester" },
+            ],
+          },
+          {
+            id: "s2",
+            num: "2",
+            title: "Risk engine",
+            tag: "the authority",
+            skills: [
+              { t: "risk-manager", star: true },
+              { t: "capital-allocator" },
+              { t: "news-guard" },
+            ],
+          },
+          {
+            id: "s3",
+            num: "3",
+            title: "Execution",
+            tag: "same way, every time",
+            skills: [
+              { t: "execution-safety", star: true },
+              { t: "pine trio" },
+              { t: "TradingView MCP" },
+            ],
+          },
+          {
+            id: "s4",
+            num: "4",
+            title: "Monitor & review",
+            tag: "the learning loop",
+            skills: [
+              { t: "tear-sheet" },
+              { t: "trade-journal" },
+              { t: "trading-loop", star: true },
+              { t: "autoresearch" },
+            ],
+          },
+        ];
+
+        // the 4 stage cards — uniform width, evenly spaced. One reveal group each.
+        stageDefs.forEach((s, i) =>
+          N({
+            id: s.id,
+            x: SX0 + i * (SW + GAP),
+            y: TOP,
+            w: SW,
+            h: 0,
+            fixedW: SW,
+            kind: "stage",
+            num: s.num,
+            title: s.title,
+            tag: s.tag,
+            skills: s.skills,
+            group: 2 + i,
+          }),
+        );
+
+        // strategy + intent feed in from the left (x finalised after measuring)
+        N({
+          id: "strat",
+          x: 40,
+          y: TOP,
+          w: 0,
+          h: 0,
+          kind: "flowstrong",
+          title: "Your strategy",
+          sub: "a plug-in · just proposes a trade",
+          group: 1,
+        });
+        N({
+          id: "intent",
+          x: 220,
+          y: TOP,
+          w: 0,
+          h: 0,
+          kind: "flow",
+          title: "Trade intent",
+          sub: "a proposal, not an order",
+          group: 1,
+        });
+
+        // operator band across the top; foundations band across the bottom
+        N({
+          id: "op",
+          x: SX0,
+          y: -180,
+          w: bandW,
+          h: 0,
+          fixedW: bandW,
+          kind: "operator",
+          title: "AI — the operator",
+          sub: "runs the whole loop in the background · metered spend cap · always routed through the risk engine, never around it",
+          group: 7,
+        });
+        N({
+          id: "found",
+          x: SX0,
+          y: 600,
+          w: bandW,
+          h: 0,
+          fixedW: bandW,
+          kind: "foundation",
+          title: "Foundations · set up once",
+          sub: "the tools your AI is allowed to touch — charts, market data, your broker",
+          chips: [
+            "mcp-builder",
+            "claude-api",
+            "TradingView MCP",
+            "trading-os MCP",
+            "Alpha Vantage MCP",
+          ],
+          group: 6,
+        });
+
+        // ---- edges: one clean horizontal flow + one labelled return loop ----
+        E("strat", "intent", { label: "emits", spine: true, group: 1 });
+        E("intent", "s1", { spine: true, group: 2 });
+        E("s1", "s2", { spine: true, group: 3 });
+        E("s2", "s3", { spine: true, group: 4 });
+        E("s3", "s4", { spine: true, group: 5 });
+        E("s4", "strat", {
+          label: "learn & repeat",
+          route: "loop",
+          dashed: true,
+          group: 8,
+        });
+
+        maxGroup = 8;
+        revealLevel = Infinity;
+        selected = null;
+
+        // pass 1 — render to measure real sizes
+        render();
+
+        // right-align strategy + intent into the left of stage 1, on the spine row
+        const intent = nodeById("intent"),
+          strat = nodeById("strat");
+        intent.x = nodeById("s1").x - GAP - intent.w;
+        strat.x = intent.x - GAP - strat.w;
+
+        // operator above the row; foundations + loop lane below the tallest card
+        const stageBottom = Math.max(
+          ...stageDefs.map((s) => {
+            const n = nodeById(s.id);
+            return n.y + n.h;
+          }),
+        );
+        nodeById("op").y = TOP - nodeById("op").h - 74;
+        LANE_Y = stageBottom + 46;
+        nodeById("found").y = stageBottom + 100;
+
+        // pass 2 — final positions, then frame everything
+        render();
+        save();
+        fitTo(nodes);
+        toast("system loaded — hit ▶ to reveal it left to right");
+      }
+
+      // ============================================================
+      //  Reveal controls
+      // ============================================================
+      function revealReset() {
+        revealLevel = 1;
+        render();
+        fitTo(nodes.filter(visible));
+      }
+      function revealFwd() {
+        if (revealLevel === Infinity) revealLevel = 1;
+        else revealLevel = Math.min(maxGroup, revealLevel + 1);
+        render();
+        fitTo(nodes.filter(visible));
+      }
+      function revealBack() {
+        if (revealLevel === Infinity) revealLevel = maxGroup;
+        revealLevel = Math.max(1, revealLevel - 1);
+        render();
+        fitTo(nodes.filter(visible));
+      }
+
+      // ============================================================
+      //  PRESENT MODE — the recording script, synced to the canvas.
+      //  Each beat drives the reveal level + zoom; you just hit Next.
+      //  Word-for-word for the scripted opens; beat prompts for the
+      //  lesson body. Mirrors 01_complete-ai-investing-system.md.
+      // ============================================================
+      let BEATS = [
+        {
+          chapter: "Open · declaration",
+          title: "The definitive-course promise",
+          time: "0:00 · to camera · ~20s",
+          reveal: 0,
+          do: "Straight to camera, before any story. Set the frame: complete, we do it together, and it's free.",
+          say: "“This is the definitive course on what a complete AI trading system actually looks like — and we're going to walk through <b>all of it together</b>, start to finish. At the end I give you the <b>entire system, free</b>. So if you've ever felt like you're one good strategy away from making this work — stay with me. Because that was never the thing stopping you.”",
+        },
+        {
+          chapter: "Open · cold open",
+          title: "Archie Karas — the run",
+          time: "~0:20 · story · ~80s",
+          reveal: 0,
+          do: "Slow, giver's tempo. One vivid true story — real names, years, numbers. This is the emotional spine.",
+          say: "Dec 1992 · $50 in his pocket → borrows $10k → sits down against Ungar, Brunson, Reese and <b>beats them all</b> → turns it into ~$40m over 3 years. What did the house do? <b>Nothing.</b> It smiled, kept the tables open, and waited. 1995 — in ~3 weeks he lost the entire $40m.<br><br>Land it: “He was the <b>strategy</b>. The house was the <b>system</b>. And the system always wins. So I'm not giving you a strategy — I'm giving you the system that turns you from the gambler into the house. And I'm giving you the whole thing, free.”",
+          note: "Optional proof button: “His name was Archie Karas. Look him up.”",
+        },
+        {
+          chapter: "Open · credibility",
+          title: "Your story — £1k → £180k",
+          time: "~1:50 · to camera · ~45s",
+          reveal: 0,
+          do: "Connection, not a bare stat. The lunch-breaks-in-the-car grind; mornings and evenings.",
+          say: "Normal job → researched markets in every gap I had → started with <b>£1k</b> → three years later that portfolio was <b>£180k</b>. Framed as personal history: “you decide if that's good — that's just how it went for me.” Now AI does the heavy lifting, so I rebuilt the whole thing to run itself — and I'm giving it away, because I'd rather you have it than keep it behind a paywall to look clever.",
+          note: "Claim guardrail: personal history only. No “you'll get this too.” Must stay real + defensible (see launch.md).",
+        },
+        {
+          chapter: "Map · orientation",
+          title: "The whole picture, one screen",
+          time: "~2:40 · diagram · ~3-4m",
+          reveal: 5,
+          focus: null,
+          do: "Reveal the spine. Walk it fast, left → right. Don't go deep yet — just show every box exists.",
+          say: "The one line the whole lesson hangs on: <b>System = the environment · Strategy = a plug-in · Risk = the authority · AI = the operator.</b><br><br>A strategy just emits a <b>trade intent</b> → the system validates it → sizes it → approves or blocks it → executes it → monitors it. “You're not watching a strategy. You're watching a <b>system that gives any decent strategy a real chance.</b>”<br><br>Promise: “By the end you'll understand every box — and the actual build is in my free Skool. Nothing held back.”",
+        },
+        {
+          chapter: "Lesson · foundations",
+          title: "Give the brain hands (MCP + API) ★",
+          time: "~6m · deep — the superpower moment",
+          reveal: 6,
+          focus: "found",
+          do: "Focus the foundations band. Demystify the two scary words, then show it live.",
+          say: "An AI in a chat box is a <b>brain in a jar</b> — it can't see your charts or place a trade. <b>API</b> = a doorway one app opens so another can walk through. <b>MCP</b> = the universal adapter that plugs your AI into all those doorways at once, set up once.<br><br><b>Show it live:</b> connect to TradingView, ask in plain English what the market's doing, watch it go look. That's the moment it becomes an <b>operator</b>, not a chatbot.",
+          note: "★ Go deep here — this is the jaw-drop that makes everything after feel possible.",
+        },
+        {
+          chapter: "Lesson · stage 1",
+          title: "Research & validation — is the edge real? ★",
+          time: "~deep",
+          reveal: 6,
+          focus: "s1",
+          do: "Zoom to Stage 1. Fast tour of the names, then go deep on 'why most backtests lie'.",
+          say: 'Fast: strategy-audit · backtest · frameworks (look-ahead, survivorship, costs) · regime · alpha-combine · the pine trio.<br><br><b>★ Deep:</b> a curve that fits the <i>past</i> is a different thing from one that works in the <i>future</i>. Two checks almost nobody runs — <b>walk-forward</b> (prove it on data it\'s never seen) and the <b>overfitting check</b> (try 500, one looks amazing by luck). Run <span class="mono">pbo-deflated-sharpe</span> → PBO% / Deflated Sharpe / pass-fail on screen.',
+          callback:
+            "↺ No edge survives both checks → no money. <b>The house proved its edge before it opened.</b>",
+        },
+        {
+          chapter: "Lesson · stage 2",
+          title: "Risk engine — what kills accounts ★",
+          time: "~deep · the heart",
+          reveal: 6,
+          focus: "s2",
+          do: "Zoom to Stage 2. This is the emotional core — the one inversion.",
+          say: "Named fast: risk-per-trade · sizing (Kelly / half / quarter) · exposure · <b>correlation</b> (five trades can secretly be one bet) · drawdown · news blackout.<br><br><b>★ The inversion:</b> your strategy <i>asks</i>; the risk engine <i>decides</i> — approve, reduce, or block. The strategy never touches the broker. Skills: risk-manager (gate + circuit breaker) · capital-allocator (the sizing authority) · news-guard (no NFP/FOMC).",
+          callback:
+            "↺ “Remember 'you put too much on'? This is the box that never lets you. Archie had no box.”",
+        },
+        {
+          chapter: "Lesson · stage 3",
+          title: "Execution — same way, every time ★",
+          time: "~deep",
+          reveal: 6,
+          focus: "s3",
+          do: "Zoom to Stage 3. The discipline defaults, then the broker safety gate.",
+          say: 'Defaults: <b>paper-first · live OFF by default · preview → confirm.</b> Kills the late entry, the moved stop, the revenge re-entry.<br><br><b>★ The gap is the thesis:</b> no order reaches a real broker without (1) passing hard risk limits and (2) a typed human confirm — you literally type <span class="mono">CONFIRM SELL 50 SPY @ market</span>. Live is hard to switch on <i>on purpose</i>.',
+          callback: "↺ The house never lets a dealer freelance.",
+        },
+        {
+          chapter: "Lesson · stage 4",
+          title: "Monitor & review — the learning loop ★",
+          time: "~deep",
+          reveal: 6,
+          focus: "s4",
+          do: "Zoom to Stage 4. The watching layer, then the self-learning loop.",
+          say: "Watching layer: tear-sheet (real-number report) · trade-journal (your own behaviour is a risk to track — its loss-autopsy emits a <i>specific</i> rule change) · alerts.<br><br><b>★ The loop:</b> hypothesis → paper-trade a month → measure → loss-autopsy → change <b>ONE variable</b> → keep if it improved, else revert → repeat. Hard rule on screen: one variable at a time.",
+          callback:
+            "↺ “The part Archie never had — a system that learns from its mistakes instead of repeating them until it's broke.”",
+        },
+        {
+          chapter: "Lesson · the operator",
+          title: "The AI runs it in the background",
+          time: "~short · tie the bow",
+          reveal: 7,
+          focus: "op",
+          do: "Reveal the operator band across the top. Zoom to it. Short and confident.",
+          say: "AI = the operator. <b>Metered</b> — a spend cap so it can't run away. And <b>always routed through the risk engine, never around it.</b><br><br>“You designed the casino. The AI is the dealer — it never sleeps, never tilts, and never breaks your rules.”",
+        },
+        {
+          chapter: "The give",
+          title: "Straight to the free Skool",
+          time: "~2m · selfless landing",
+          reveal: 8,
+          focus: null,
+          do: "Zoom out to the whole system + close the loop. This is what they get. Single focus, no other ask.",
+          say: "“That's the whole system. Here's the part people don't believe: I've put all of it — the <b>Trading Suite</b> — in my free Skool. Not a teaser. The whole thing. Free.”<br><br>How, dead simple: join free → <b>download the Trading Suite folder</b> → drop it on your machine → connect the two MCPs → install your own strategy. One folder.",
+          note: "Wk1 = near-zero ask. The free Skool is the ONLY ask. Fill in [SKOOL LINK] before publish + confirm the Suite is actually loaded there.",
+        },
+        {
+          chapter: "The bridge",
+          title: "Soft seed — Aug 5, then outro",
+          time: "~30s · no pitch",
+          reveal: 8,
+          focus: null,
+          do: "One quiet line. Do not oversell — Wk1 stays soft.",
+          say: "“One last thing. Everything you just saw — small parts each doing one job, run by AI in the background — that's not just how I trade. It's how I run my whole business. I'm doing something live on <b>August 5th</b> about exactly that. Link's in the description. But honestly? <b>Go get the Suite first.</b>”",
+          note: "Seeds the Agents-to-Income webinar via the free-Skool nurture. Ask escalates in later videos.",
+        },
+      ];
+
+      // The notes live in a SEPARATE pop-out window (drag it to your other
+      // screen). The recorded screen stays a clean canvas. The pop-out drives
+      // the canvas: Prev/Next there → reveal + zoom here.
+      let presentWin = null;
+      let presentPoll = null;
+      let pFont = +(localStorage.getItem("sc-pfont") || 17);
+
+      function presenterCSS() {
+        // self-contained styles for the pop-out (it can't see this page's CSS)
+        return `
+          @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@500;700;800&family=Almarai:wght@300;400;700;800&family=Instrument+Serif:ital@0;1&display=swap");
+          :root{--pfs:${pFont}px}
+          html[data-theme="dark"]{--bg:#0f0f0f;--card:#1c1b1a;--card2:#2a2929;--border:#38352f;--fg:#f6f5f2;--fg2:#aba9a4;--fg3:#6f6b64;--accent:#ffd000;--accent2:#ffb700;--accentink:#0f0f0f;--soft:rgba(255,208,0,.14)}
+          html[data-theme="light"]{--bg:#f6f7f9;--card:#fff;--card2:#f1f3f6;--border:#e0e3e9;--fg:#0a0b0d;--fg2:#5b626b;--fg3:#9097a0;--accent:#c6f24e;--accent2:#b6e83a;--accentink:#23370a;--soft:rgba(198,242,78,.28)}
+          html[data-theme="site"]{--bg:#0a0b0d;--card:#101010;--card2:#212121;--border:rgba(225,224,204,.12);--fg:#e1e0cc;--fg2:rgba(225,224,204,.66);--fg3:rgba(225,224,204,.4);--accent:#c6f24e;--accent2:#d2f86b;--accentink:#0a0b0d;--soft:rgba(198,242,78,.14)}
+          html[data-theme="site"] body{font-family:"Almarai",system-ui,sans-serif}
+          *{box-sizing:border-box}
+          html,body{margin:0;height:100%}
+          body{background:var(--bg);color:var(--fg);font-family:"Space Grotesk",system-ui,sans-serif;display:flex;flex-direction:column;height:100vh}
+          #ph{display:flex;align-items:center;justify-content:space-between;padding:18px 22px 12px;border-bottom:1px solid var(--border)}
+          #pChapter{font-family:"JetBrains Mono",monospace;font-weight:800;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+          #pCount{font-family:"JetBrains Mono",monospace;font-weight:700;font-size:12px;color:var(--fg3)}
+          #pBody{flex:1;overflow-y:auto;padding:20px 24px 28px}
+          .p-title{font-weight:700;font-size:26px;line-height:1.12;letter-spacing:-.02em;margin:0 0 4px}
+          .p-time{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--fg3);letter-spacing:.05em}
+          .p-block{margin-top:20px}
+          .p-block .lbl{font-family:"JetBrains Mono",monospace;font-weight:800;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--fg3);display:block;margin-bottom:7px}
+          .p-do{font-size:calc(var(--pfs) - 2px);color:var(--fg2);line-height:1.5}
+          .p-say{font-size:var(--pfs);line-height:1.6;color:var(--fg)}
+          .p-say .mono{font-family:"JetBrains Mono",monospace;font-size:calc(var(--pfs) - 3px);background:var(--card2);padding:1px 6px;border-radius:5px}
+          .p-callback{border-left:3px solid var(--accent);background:var(--soft);padding:11px 13px;border-radius:0 10px 10px 0;font-size:calc(var(--pfs) - 1px);line-height:1.5}
+          .p-note{font-size:calc(var(--pfs) - 3px);line-height:1.5;color:var(--fg3);font-style:italic}
+          #pFoot{display:flex;align-items:center;gap:8px;padding:14px 20px;border-top:1px solid var(--border)}
+          button{font-family:"JetBrains Mono",monospace;font-weight:700;font-size:13px;border:1px solid var(--border);background:var(--card);color:var(--fg);padding:11px 14px;border-radius:11px;cursor:pointer}
+          button:disabled{opacity:.4;cursor:default}
+          #pNext{flex:1;background:linear-gradient(180deg,var(--accent),var(--accent2));color:var(--accentink);border-color:var(--accent2)}
+          .fbtn{padding:11px 12px}
+        `;
+      }
+      function presenterHTML(theme) {
+        return `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8">
+          <title>Recording notes</title><style>${presenterCSS()}</style></head>
+          <body>
+            <div id="ph"><span id="pChapter"></span><span id="pCount"></span></div>
+            <div id="pBody"></div>
+            <div id="pFoot">
+              <button id="pPrev">◀ Back</button>
+              <button class="fbtn" id="pFontDown" title="Smaller text">A−</button>
+              <button class="fbtn" id="pFontUp" title="Bigger text">A+</button>
+              <button id="pNext">Next ▶</button>
+            </div>
+          </body></html>`;
+      }
+
+      function beatBodyHTML(b) {
+        let h = `<div class="p-title">${b.title}</div>`;
+        if (b.time) h += `<div class="p-time">${b.time}</div>`;
+        if (b.do)
+          h += `<div class="p-block"><span class="lbl">On camera / canvas</span><div class="p-do">${b.do}</div></div>`;
+        if (b.say)
+          h += `<div class="p-block"><span class="lbl">Say</span><div class="p-say">${b.say}</div></div>`;
+        if (b.callback)
+          h += `<div class="p-block"><span class="lbl">Re-engage · tie to the house</span><div class="p-callback">${b.callback}</div></div>`;
+        if (b.note)
+          h += `<div class="p-block"><span class="lbl">Note / guardrail</span><div class="p-note">${b.note}</div></div>`;
+        return h;
+      }
+      function renderPanel() {
+        if (!presentWin || presentWin.closed) return;
+        const d = presentWin.document,
+          b = BEATS[presentIdx];
+        const set = (id, v) => {
+          const el = d.getElementById(id);
+          if (el) el.textContent = v;
+        };
+        set("pChapter", b.chapter);
+        set("pCount", presentIdx + 1 + " / " + BEATS.length);
+        const body = d.getElementById("pBody");
+        if (body) {
+          body.innerHTML = beatBodyHTML(b);
+          body.scrollTop = 0;
+        }
+        const prev = d.getElementById("pPrev"),
+          next = d.getElementById("pNext");
+        if (prev) prev.disabled = presentIdx === 0;
+        if (next) next.disabled = presentIdx === BEATS.length - 1;
+        d.documentElement.style.setProperty("--pfs", pFont + "px");
+      }
+
+      // Holding card on the recorded (canvas) screen during story beats.
+      // Shows ONLY the static, audience-safe brand card — never the beat
+      // name, timings, or "on camera" cues (those live in the pop-out only).
+      function updateTitleCard(b) {
+        const tc = document.getElementById("titlecard");
+        tc.classList.toggle("show", presenting && b && b.reveal === 0);
+      }
+
+      function goToBeat(i) {
+        presentIdx = Math.max(0, Math.min(BEATS.length - 1, i));
+        const b = BEATS[presentIdx];
+        revealLevel = b.reveal;
+        selected = null;
+        render();
+        updateTitleCard(b);
+        if (b.focus) focusNode(b.focus);
+        else if (b.reveal !== 0) fitVisible(110);
+        renderPanel();
+      }
+
+      function wirePresenter() {
+        const d = presentWin.document;
+        d.getElementById("pNext").onclick = () => goToBeat(presentIdx + 1);
+        d.getElementById("pPrev").onclick = () => goToBeat(presentIdx - 1);
+        d.getElementById("pFontUp").onclick = () => setFont(pFont + 1);
+        d.getElementById("pFontDown").onclick = () => setFont(pFont - 1);
+        d.addEventListener("keydown", (e) => {
+          if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
+            e.preventDefault();
+            goToBeat(presentIdx + 1);
+          } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
+            e.preventDefault();
+            goToBeat(presentIdx - 1);
+          } else if (e.key === "Escape") {
+            exitPresent();
+          }
+        });
+      }
+      function setFont(px) {
+        pFont = Math.max(12, Math.min(30, px));
+        localStorage.setItem("sc-pfont", pFont);
+        renderPanel();
+      }
+      function startPresent() {
+        if (!nodes.length) autoPopulate();
+        const theme = document.documentElement.dataset.theme || "dark";
+        presentWin = window.open(
+          "",
+          "zocanvas_present",
+          "width=460,height=840",
+        );
+        if (!presentWin) {
+          toast("allow pop-ups for this page, then hit Present again");
+          return;
+        }
+        presentWin.document.open();
+        presentWin.document.write(presenterHTML(theme));
+        presentWin.document.close();
+        presenting = true;
+        panelInset = 0; // canvas stays full-width + clean for recording
+        document.getElementById("btnPresent").textContent = "◼ Stop";
+        document.getElementById("help").classList.add("collapsed");
+        const boot = () => {
+          wirePresenter();
+          goToBeat(presentIdx || 0);
+        };
+        // document.write is synchronous, but guard for load just in case
+        if (presentWin.document.getElementById("pNext")) boot();
+        else presentWin.onload = boot;
+        clearInterval(presentPoll);
+        presentPoll = setInterval(() => {
+          if (!presentWin || presentWin.closed) exitPresent();
+        }, 700);
+      }
+      function exitPresent() {
+        presenting = false;
+        panelInset = 0;
+        clearInterval(presentPoll);
+        if (presentWin && !presentWin.closed) presentWin.close();
+        presentWin = null;
+        document.getElementById("titlecard").classList.remove("show");
+        document.getElementById("btnPresent").textContent = "▶ Present";
+        revealLevel = Infinity;
+        render();
+        fitVisible(110);
+      }
+
+      // ============================================================
+      //  Toast + wiring
+      // ============================================================
+      let toastT;
+      function toast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.classList.add("show");
+        clearTimeout(toastT);
+        toastT = setTimeout(() => t.classList.remove("show"), 1800);
+      }
+
+      document.getElementById("btnAuto").onclick = () => {
+        if (
+          nodes.length &&
+          !confirm("Replace the current canvas with the auto-populated system?")
+        )
+          return;
+        autoPopulate();
+      };
+      document.getElementById("btnAdd").onclick = () => {
+        const w = toWorld(VP.clientWidth / 2, VP.clientHeight / 2);
+        addNote(w.x - 90, w.y - 30);
+      };
+      document.getElementById("btnRevealReset").onclick = revealReset;
+      document.getElementById("btnRevealFwd").onclick = revealFwd;
+      document.getElementById("btnRevealBack").onclick = revealBack;
+      document.getElementById("btnZoomIn").onclick = () =>
+        zoomAt(VP.clientWidth / 2, VP.clientHeight / 2, 1.15);
+      document.getElementById("btnZoomOut").onclick = () =>
+        zoomAt(VP.clientWidth / 2, VP.clientHeight / 2, 0.87);
+      document.getElementById("btnFit").onclick = () =>
+        fitTo(nodes.filter(visible));
+      document.getElementById("btnExport").onclick = exportJSON;
+      document.getElementById("btnImport").onclick = importJSON;
+      document.getElementById("btnReset").onclick = () => {
+        if (confirm("Clear the whole canvas?")) {
+          nodes = [];
+          edges = [];
+          revealLevel = Infinity;
+          selected = null;
+          save();
+          render();
+        }
+      };
+      document.getElementById("btnTheme").onclick = () => {
+        const h = document.documentElement;
+        h.dataset.theme = h.dataset.theme === "dark" ? "light" : "dark";
+        localStorage.setItem("sc-theme", h.dataset.theme);
+        if (presentWin && !presentWin.closed)
+          presentWin.document.documentElement.dataset.theme = h.dataset.theme;
+        render();
+      };
+      window.addEventListener("beforeunload", () => {
+        if (presentWin && !presentWin.closed) presentWin.close();
+      });
+      document.getElementById("helpToggle").onclick = () =>
+        document.getElementById("help").classList.toggle("collapsed");
+      document.getElementById("btnPresent").onclick = () =>
+        presenting ? exitPresent() : startPresent();
+
+      // ============================================================
+      //  Episode runtime — seed from the <script id="episode-data">
+      //  data-island, plus the node drawer (layers / fixes / image),
+      //  the outcomes card, and focus-mode controls. Added for the
+      //  packaged episode (see episodes/_SCHEMA.md §1). Data, not new
+      //  doctrine — mirrors the built-in Video #1 autoPopulate().
+      // ============================================================
+      let MATRIX = [];
+      function readEpisodeIsland() {
+        const el = document.getElementById("episode-data");
+        if (!el || !el.textContent.trim()) return null;
+        try {
+          return JSON.parse(el.textContent);
+        } catch (e) {
+          console.warn("episode-data parse failed", e);
+          return null;
+        }
+      }
+      function applyThemeFromMeta() {
+        if (META.theme === "gold")
+          document.documentElement.dataset.theme = "dark";
+        else if (META.theme === "lime")
+          document.documentElement.dataset.theme = "light";
+        else if (META.theme === "site")
+          document.documentElement.dataset.theme = "site";
+      }
+      // Chrome level from the island: "viewer" trims the toolbar to a simple
+      // notepad (+ Text · zoom · Fit · Save/Load); anything else keeps the full
+      // recording toolbar. ?mode=view still overrides to zoom + Fit only.
+      function applyChromeFromMeta() {
+        if (META.chrome === "viewer")
+          document.documentElement.classList.add("chrome-viewer");
+      }
+      function seedFromEpisode() {
+        const EP = readEpisodeIsland();
+        if (!EP || !EP.meta) return false;
+        META = EP.meta || {};
+        MATRIX = EP.matrix || [];
+        applyThemeFromMeta();
+        applyChromeFromMeta();
+        // known-good geometry + BEATS come from autoPopulate; overlay the
+        // episode.json enrichment (layers / problems / step / img / t0) by id.
+        autoPopulate();
+        if (Array.isArray(EP.nodes)) {
+          const byId = {};
+          EP.nodes.forEach((n) => (byId[n.id] = n));
+          nodes.forEach((n) => {
+            const e = byId[n.id];
+            if (!e) return;
+            [
+              "step",
+              "layers",
+              "problems",
+              "img",
+              "t0",
+              "t1",
+              "sub",
+              "tag",
+              "title",
+              "num",
+            ].forEach((k) => {
+              if (e[k] !== undefined) n[k] = e[k];
+            });
+          });
+        }
+        if (Array.isArray(EP.beats) && EP.beats.length) BEATS = EP.beats;
+        render();
+        save();
+        fitTo(nodes.filter(visible));
+        fillOutcomes();
+        return true;
+      }
+
+      // ---- outcomes card ("by the end you'll be able to…") ----
+      function fillOutcomes() {
+        const box = document.getElementById("outcomes");
+        const ul = box && box.querySelector(".oc-list");
+        if (!box || !ul) return;
+        const outs = (META && META.outcomes) || [];
+        const dismissed = localStorage.getItem(
+          "sc-oc-dismissed-" + (META.slug || "x"),
+        );
+        if (!outs.length || dismissed) {
+          box.classList.remove("show");
+          return;
+        }
+        ul.innerHTML = "";
+        outs.forEach((o) => {
+          const li = document.createElement("li");
+          li.textContent = o;
+          ul.appendChild(li);
+        });
+        box.classList.add("show");
+      }
+
+      // ---- node drawer (layers / problems / image) ----
+      function matrixById(id) {
+        return (MATRIX || []).find((p) => p.id === id) || null;
+      }
+      function openDrawer(n) {
+        drawerNode = n;
+        const hasLayers = !!(n.layers && n.layers.length);
+        const hasProblems = !!(n.problems && n.problems.length);
+        const hasImg = !!n.img;
+        drawerTab = hasLayers ? "layers" : hasProblems ? "problems" : "image";
+        layerIdx = 0;
+        document.getElementById("drTitle").textContent = n.title || "Details";
+        const tabs = document.getElementById("drTabs");
+        tabs.innerHTML = "";
+        const addTab = (key, label, on) => {
+          if (!on) return;
+          const b = document.createElement("button");
+          b.className = "dr-tab" + (drawerTab === key ? " active" : "");
+          b.textContent = label;
+          b.dataset.k = key;
+          b.onclick = () => {
+            drawerTab = key;
+            layerIdx = 0;
+            renderDrawer();
+          };
+          tabs.appendChild(b);
+        };
+        addTab("layers", "How it works", hasLayers);
+        addTab("problems", "If you get stuck", hasProblems);
+        addTab("image", "Image", hasImg);
+        document.getElementById("drawer").classList.add("open");
+        document.getElementById("drawer-backdrop").classList.add("open");
+        renderDrawer();
+      }
+      function closeDrawer() {
+        drawerNode = null;
+        document.getElementById("drawer").classList.remove("open");
+        document.getElementById("drawer-backdrop").classList.remove("open");
+      }
+      function renderDrawer() {
+        const n = drawerNode;
+        if (!n) return;
+        [...document.getElementById("drTabs").children].forEach((b) =>
+          b.classList.toggle("active", b.dataset.k === drawerTab),
+        );
+        const body = document.getElementById("drBody");
+        body.innerHTML = "";
+        if (drawerTab === "layers") renderLayersTab(body, n);
+        else if (drawerTab === "problems") renderProblemsTab(body, n);
+        else renderImageTab(body, n);
+      }
+      function renderLayersTab(body, n) {
+        const L = n.layers || [];
+        const layer = document.createElement("div");
+        layer.className = "dr-layer";
+        layer.innerHTML = L[layerIdx] || "";
+        body.appendChild(layer);
+        const pager = document.createElement("div");
+        pager.className = "dr-pager";
+        const prev = document.createElement("button");
+        prev.textContent = "‹";
+        prev.disabled = layerIdx === 0;
+        prev.onclick = () => {
+          layerIdx = Math.max(0, layerIdx - 1);
+          renderDrawer();
+        };
+        const next = document.createElement("button");
+        next.textContent = "›";
+        next.disabled = layerIdx >= L.length - 1;
+        next.onclick = () => {
+          layerIdx = Math.min(L.length - 1, layerIdx + 1);
+          renderDrawer();
+        };
+        const dots = document.createElement("div");
+        dots.className = "dr-dots";
+        L.forEach((_, i) => {
+          const d = document.createElement("div");
+          d.className = "dr-dot" + (i === layerIdx ? " on" : "");
+          dots.appendChild(d);
+        });
+        pager.appendChild(prev);
+        pager.appendChild(dots);
+        pager.appendChild(next);
+        body.appendChild(pager);
+        const lbl = document.createElement("div");
+        lbl.style.cssText =
+          "font-family:var(--font-mono);font-size:10px;color:var(--fg-3);margin-top:14px;letter-spacing:.06em;text-transform:uppercase;";
+        lbl.textContent =
+          "Depth " +
+          (layerIdx + 1) +
+          " of " +
+          L.length +
+          " · skim → deeper → deepest";
+        body.appendChild(lbl);
+      }
+      function renderProblemsTab(body, n) {
+        const fr = document.createElement("div");
+        fr.className = "dr-filter";
+        const group = (label, opts, cur, set) => {
+          const l = document.createElement("span");
+          l.className = "lbl";
+          l.textContent = label;
+          fr.appendChild(l);
+          opts.forEach((o) => {
+            const c = document.createElement("button");
+            c.className = "dr-chip" + (cur() === o.v ? " on" : "");
+            c.textContent = o.t;
+            c.onclick = () => {
+              set(o.v);
+              renderDrawer();
+            };
+            fr.appendChild(c);
+          });
+        };
+        group(
+          "OS",
+          [
+            { t: "macOS", v: "mac" },
+            { t: "Windows", v: "win" },
+            { t: "Linux", v: "linux" },
+          ],
+          () => probPlat,
+          (v) => (probPlat = v),
+        );
+        group(
+          "Agent",
+          [
+            { t: "Claude", v: "claude" },
+            { t: "Codex", v: "codex" },
+          ],
+          () => probAgent,
+          (v) => (probAgent = v),
+        );
+        body.appendChild(fr);
+        const probs = (n.problems || [])
+          .map(matrixById)
+          .filter(Boolean)
+          .filter(
+            (p) =>
+              (!p.platforms || p.platforms.includes(probPlat)) &&
+              (!p.agents || p.agents.includes(probAgent)),
+          );
+        if (!probs.length) {
+          const e = document.createElement("div");
+          e.className = "dr-prob";
+          e.innerHTML =
+            '<h4>Nothing logged for this combo</h4><div class="sym">No known issue for ' +
+            probPlat +
+            " + " +
+            probAgent +
+            ". Try another combo, or ask in the free Skool.</div>";
+          body.appendChild(e);
+          return;
+        }
+        probs.forEach((p) => {
+          const card = document.createElement("div");
+          card.className = "dr-prob";
+          card.innerHTML =
+            "<h4>" +
+            (p.problem || p.step || "") +
+            "</h4>" +
+            (p.symptom ? '<div class="sym">' + p.symptom + "</div>" : "") +
+            (p.fix ? '<div class="fix">' + p.fix + "</div>" : "") +
+            '<div class="pmeta">' +
+            (p.platforms || []).join(" · ") +
+            " · " +
+            (p.agents || []).join(" · ") +
+            "</div>";
+          if (p.prompt) {
+            const b = document.createElement("button");
+            b.className = "dr-copy";
+            b.textContent = "⧉ copy the fix prompt";
+            b.onclick = () => {
+              try {
+                navigator.clipboard && navigator.clipboard.writeText(p.prompt);
+              } catch (e) {}
+              b.textContent = "copied ✓";
+              setTimeout(() => (b.textContent = "⧉ copy the fix prompt"), 1400);
+            };
+            card.appendChild(b);
+          }
+          body.appendChild(card);
+        });
+      }
+      function renderImageTab(body, n) {
+        if (!n.img) {
+          const e = document.createElement("div");
+          e.className = "dr-layer";
+          e.textContent = "No image yet — imagery generates after recording.";
+          body.appendChild(e);
+          return;
+        }
+        const im = document.createElement("img");
+        im.src = n.img;
+        im.alt = n.title || "";
+        im.style.cssText =
+          "width:100%;border-radius:12px;border:1px solid var(--border);";
+        body.appendChild(im);
+      }
+
+      // ---- focus-mode controls (walk the map one step at a time) ----
+      function setFocusMode(on) {
+        focusMode = on;
+        focusStep = 1;
+        document.getElementById("btnFocus").classList.toggle("active", on);
+        const fi = document.getElementById("focusind");
+        if (fi) fi.classList.toggle("show", on);
+        updateFocusInd();
+        render();
+        fitVisible(120);
+      }
+      function updateFocusInd() {
+        const lbl = document.getElementById("fiLbl");
+        if (!lbl) return;
+        const total = stepNodes().length || 1;
+        lbl.textContent = "Step " + Math.min(focusStep, total) + " / " + total;
+      }
+      function focusStepTo(i) {
+        const total = stepNodes().length || 1;
+        focusStep = Math.max(1, Math.min(total, i));
+        updateFocusInd();
+        render();
+        const cur = stepNodes()[focusStep - 1];
+        if (cur) focusNode(cur.id);
+      }
+
+      // ---- wire the added controls (DOM already parsed above) ----
+      (function wireEpisodeUI() {
+        const on = (id, fn) => {
+          const el = document.getElementById(id);
+          if (el) el.onclick = fn;
+        };
+        on("drClose", closeDrawer);
+        on("drawer-backdrop", closeDrawer);
+        on("ocClose", () => {
+          document.getElementById("outcomes").classList.remove("show");
+          localStorage.setItem("sc-oc-dismissed-" + (META.slug || "x"), "1");
+        });
+        on("bannerClose", () => {
+          const b = document.getElementById("banner");
+          if (b) b.classList.remove("show");
+          localStorage.setItem("sc-banner-seen", "1");
+        });
+        on("btnFocus", () => setFocusMode(!focusMode));
+        on("fiPrev", () => focusStepTo(focusStep - 1));
+        on("fiNext", () => focusStepTo(focusStep + 1));
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && drawerNode) closeDrawer();
+        });
+      })();
+
+      // ============================================================
+      //  Boot
+      // ============================================================
+      (function init() {
+        const th = VIEW ? null : localStorage.getItem("sc-theme");
+        if (th) document.documentElement.dataset.theme = th;
+        const fresh = VIEW || !load();
+        if (fresh) {
+          if (!seedFromEpisode()) autoPopulate();
+        } else {
+          // restore episode META/matrix from the island even when the nodes
+          // are rehydrated from localStorage (so the drawer + outcomes work).
+          const EP = readEpisodeIsland();
+          if (EP && EP.meta) {
+            META = EP.meta;
+            MATRIX = EP.matrix || [];
+          }
+          if (!th) applyThemeFromMeta();
+          applyChromeFromMeta();
+          applyCam();
+          render();
+          fillOutcomes();
+        }
+        // fonts arrive async and change text width — remeasure + refit once ready
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(() => {
+            render();
+            if (fresh) fitTo(nodes.filter(visible));
+          });
+        }
+      })();
+      window.addEventListener("resize", () => applyCam());
+    </script>
+  </body>
+</html>
